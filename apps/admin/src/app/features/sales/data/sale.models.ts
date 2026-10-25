@@ -315,7 +315,10 @@ export interface BillFlag {
 export function billFlags(bill: Bill, history: readonly BillHistoryEntry[] = []): BillFlag[] {
   const notes = new Set(bill.payments.map((p) => p.note));
   const out: BillFlag[] = [];
-  if (notes.has(ADDED_LATER_NOTE)) out.push({ label: 'Added later', tone: 'info' });
+  // A ₹0 missed bill has no payment to carry the note: its audit entry (record) says so.
+  if (notes.has(ADDED_LATER_NOTE) || history.some((h) => h.action === 'record')) {
+    out.push({ label: 'Added later', tone: 'info' });
+  }
   if (notes.has(BILL_EDITED_NOTE) || history.some((h) => h.action === 'bill_adjust')) {
     out.push({ label: 'Edited', tone: 'warning' });
   }

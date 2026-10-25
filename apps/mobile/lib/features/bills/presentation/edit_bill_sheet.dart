@@ -1,4 +1,5 @@
-/// One of my bills: what was billed and collected, earlier edits, and — when it
+/// One of my bills: what was billed and collected (for a missed bill, today's
+/// price and what was actually paid), earlier edits, and — when it
 /// can still change — the new total, how any difference was paid or given back,
 /// and a required comment. Sent as `bill.adjust`; the server records the
 /// difference as one payment or refund and audits it with the comment.
@@ -198,6 +199,30 @@ class _EditBillSheetState extends ConsumerState<EditBillSheet> {
                 style: AppTextStyles.mono(ArenaType.label)
                     .copyWith(color: arena.text),
               ),
+              // As the web's bill detail: billed at what was paid, priced on
+              // today's list, the difference shown as its own line.
+              if (b.addedLater) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  [
+                    'Added later. Played but never started on the floor.',
+                    if (b.paidDifferencePaise != 0)
+                      'Priced ${Paise(b.quotedPaise!).display} on today\'s '
+                          'list; ${Paise(b.addedLaterPaise).display} paid.',
+                  ].join(' '),
+                  key: const ValueKey('bill-added-later'),
+                  style: ArenaType.caption.copyWith(color: arena.textMuted),
+                ),
+                if (b.paidDifferencePaise != 0)
+                  Text(
+                    'Adjusted to amount paid '
+                    '${b.paidDifferencePaise < 0 ? '−' : ''}'
+                    '${Paise(b.paidDifferencePaise.abs()).display}',
+                    key: const ValueKey('bill-paid-adjustment'),
+                    style: AppTextStyles.mono(ArenaType.label)
+                        .copyWith(color: arena.text),
+                  ),
+              ],
               for (final e in b.edits) ...[
                 const SizedBox(height: AppSpacing.xs),
                 Text(

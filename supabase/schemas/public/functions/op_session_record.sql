@@ -1,24 +1,30 @@
 -- op_session_record — sync op 'session.record': add a single session that was played but never
---   started in the app (a missed bill), already ended, priced and paid in full.
+--   started in the app (a missed bill), already ended, priced, and paid what the customer paid.
 --
 -- Permission: bill_record (an owner passes). The caller is the session's created_by, so it is
 --   theirs to edit later with bill_edit (bill.adjust).
 -- Payload: session_id, payment_id (client uuids: a resend replays), customer_id, resource_id,
 --   activity_code, game_id?, controller_count?, started_at, ended_at (any past date, at most
---   24 h long), method (cash | upi | card | other), billed_amount_paise (the total the caller
---   was shown: session_quote), reason (required: 1–500 characters after trimming).
+--   24 h long), method (cash | upi | card | other), billed_amount_paise (the price the caller
+--   was shown: session_quote), paid_amount_paise? (what the customer actually paid: whole paise,
+--   0 to 1000000000; absent or null, as older apps send, = the price), reason (required: 1–500
+--   characters after trimming).
 -- Pricing: the arena's CURRENT price list (_pricing_snapshot; older lists are not kept), frozen on
---   the session like a normal start; the whole played time is billed (no booked end to stop at);
---   charge rows are built from the server's own quote.
--- Checks / errors: forbidden; reason_required; reason_too_long; invalid_payload; invalid_method;
+--   the session like a normal start; the whole played time is priced (no booked end to stop at);
+--   charge rows are built from the server's own quote. The bill is the amount paid: the charge
+--   rows keep today's price and the audit row keeps the difference.
+-- Checks / errors: forbidden; reason_required; reason_too_long; invalid_payload; invalid_total
+--   (paid_amount_paise not a whole number from 0 to 1000000000); invalid_method;
 --   time_in_future; invalid_time (end not after start, or over 24 h); not_found (customer /
 --   station / game); activity_not_offered; no_rate; overlap (the station has a session
---   recorded in that time); price_mismatch (the total differs from the server's).
+--   recorded in that time); price_mismatch (billed_amount_paise differs from the server's price).
 -- Writes, in one transaction: sessions (completed; scheduled end = actual end; ended_recorded_at
---   = now), one closed session_segments row, session_charges, one payments row for the total
---   (note 'Added later', the reason) when it is above 0, payment_status 'paid', and an audit_log
---   row (action record). No controllers are allocated: pads are not tracked for the past.
---   Returns: {session_id, billed_amount_paise, payment_status}.
+--   = now; billed_amount_paise = the amount paid), one closed session_segments row,
+--   session_charges, one payments row for the amount paid (note 'Added later', the reason) when
+--   it is above 0, payment_status 'paid', and an audit_log row (action record; after carries
+--   quoted_paise, paid_paise, difference_paise = paid − price). No controllers are allocated:
+--   pads are not tracked for the past.
+--   Returns: {session_id, billed_amount_paise (the amount paid), quoted_paise, payment_status}.
 -- Server-only: not executable by anon/authenticated; reached through sync_push.
 create or replace function public.op_session_record (
   p_arena uuid,
@@ -43,6 +49,8 @@ declare
   v_method   text := p->>'method';
   v_billed   bigint := (p->>'billed_amount_paise')::bigint;
   v_reason   text := nullif(btrim(coalesce(p->>'reason', '')), '');
+  v_paid_j   jsonb := p->'paid_amount_paise';
+  v_paid_n   numeric; v_paid bigint; v_final bigint;
   v_snap jsonb; v_seg uuid := gen_random_uuid(); q jsonb; l jsonb; v_bill jsonb;
   v_total bigint; v_pay text;
 begin
@@ -55,6 +63,17 @@ begin
      or v_start is null or v_end is null or v_billed is null or v_billed < 0
      or (v_cc is not null and v_cc not between 1 and 4) then
     raise exception 'invalid_payload';
+  end if;
+  -- An app that predates the field sends none: the customer paid the price, as before.
+  if v_paid_j is not null and v_paid_j <> 'null'::jsonb then
+    if jsonb_typeof(v_paid_j) <> 'number' then
+      raise exception 'invalid_total' using hint = 'paid_amount_paise: whole paise, 0 to 1000000000';
+    end if;
+    v_paid_n := (v_paid_j #>> '{}')::numeric;
+    if v_paid_n <> trunc(v_paid_n) or v_paid_n < 0 or v_paid_n > 1000000000 then
+      raise exception 'invalid_total' using hint = 'paid_amount_paise: whole paise, 0 to 1000000000';
+    end if;
+    v_paid := v_paid_n::bigint;
   end if;
   if v_method is null or v_method not in ('cash', 'upi', 'card', 'other') then
     raise exception 'invalid_method' using hint = 'how the bill was paid';
@@ -109,14 +128,16 @@ begin
     perform _price_mismatch('bill', v_total, v_billed);
   end if;
 
-  if v_total > 0 then
+  -- The bill is what the customer actually paid; the charge rows keep today's price.
+  v_final := coalesce(v_paid, v_total);
+  if v_final > 0 then
     insert into payments(id, arena_id, session_id, amount_paise, method, kind, note, reason,
         created_by, created_at)
-      values (v_pay_id, p_arena, v_id, v_total, v_method, 'payment', 'Added later', v_reason,
+      values (v_pay_id, p_arena, v_id, v_final, v_method, 'payment', 'Added later', v_reason,
         auth.uid(), v_now);
   end if;
-  v_pay := _payment_status(v_total, v_total);
-  update sessions set payment_status = v_pay where id = v_id;
+  v_pay := _payment_status(v_final, v_final);
+  update sessions set billed_amount_paise = v_final, payment_status = v_pay where id = v_id;
 
   update customers set last_visit_at = greatest(coalesce(last_visit_at, v_start), v_start)
     where id = v_customer;
@@ -128,16 +149,17 @@ begin
   insert into audit_log(arena_id, entity_type, entity_id, action, reason, before, after,
       created_by, created_at)
     values (p_arena, 'session', v_id, 'record', v_reason, null,
-      jsonb_build_object('billed_paise', v_total, 'method', v_method, 'resource_id', v_res,
+      jsonb_build_object('billed_paise', v_final, 'quoted_paise', v_total, 'paid_paise', v_final,
+        'difference_paise', v_final - v_total, 'method', v_method, 'resource_id', v_res,
         'started_at', v_start, 'ended_at', v_end),
       auth.uid(), v_now);
-  return jsonb_build_object('session_id', v_id, 'billed_amount_paise', v_total,
-    'payment_status', v_pay);
+  return jsonb_build_object('session_id', v_id, 'billed_amount_paise', v_final,
+    'quoted_paise', v_total, 'payment_status', v_pay);
 end;
 $function$;
 
 comment on function public.op_session_record(uuid, jsonb) is
-  'Sync op session.record: add a missed single session after the fact (bill_record), already ended, priced on the current price list and paid in full; overlap-checked against the station''s recorded play; audited with the required reason.';
+  'Sync op session.record: add a missed single session after the fact (bill_record), already ended, priced on the current price list and billed at the amount the customer actually paid (the price when an older app sends none); overlap-checked against the station''s recorded play; audited with the price, the amount paid and the required reason.';
 
 grant execute on function "public"."op_session_record"(uuid, jsonb) to "postgres", "service_role";
 

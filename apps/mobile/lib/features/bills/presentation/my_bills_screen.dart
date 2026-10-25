@@ -111,7 +111,11 @@ class _MyBillsScreenState extends ConsumerState<MyBillsScreen> {
               !(ref.watch(authControllerProvider)?.can(Permission.billRecord) ?? false)
           ? null
           : FloatingActionButton.extended(
-              onPressed: () => showAddMissedBillSheet(context, day: day),
+              // Show the day the bill closed on, which may not be the one shown.
+              onPressed: () async {
+                final added = await showAddMissedBillSheet(context, day: day);
+                if (added != null && mounted) setState(() => _day = added);
+              },
               icon: const Icon(Icons.add_rounded),
               label: const Text('Add missed bill'),
             ),
