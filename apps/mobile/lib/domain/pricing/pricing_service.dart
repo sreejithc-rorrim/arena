@@ -101,12 +101,14 @@ class PricingService {
     );
     if (rate == null) {
       return Err(Failure(
-        message: 'No price is configured for this combination.',
+        message: controllerCount == null
+            ? 'No price for $activityCode.'
+            : 'No price for $activityCode with $controllerCount '
+                'controller${controllerCount == 1 ? '' : 's'}.',
         fix: controllerCount == null
-            ? 'Add a $activityCode rate in Settings → Pricing.'
-            : 'Add a $activityCode rate for $controllerCount '
-                'controller${controllerCount == 1 ? '' : 's'} '
-                'in Settings → Pricing.',
+            ? 'Add a $activityCode price on the dashboard (Pricing).'
+            : 'Pick another controller count, or add the price on the '
+                'dashboard (Pricing).',
         code: 'no_rate',
       ));
     }

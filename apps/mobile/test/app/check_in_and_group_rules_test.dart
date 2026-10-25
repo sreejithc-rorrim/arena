@@ -146,6 +146,24 @@ void main() {
       expect(r.failureOrNull?.code, 'players_exceeded');
     });
 
+    test('a controller count the price list cannot bill is refused (#30)',
+        () async {
+      // No PS5 rate for two controllers: the session would bill ₹0 and the
+      // server would refuse it (no_rate), so check-in must not start it.
+      await (db.delete(db.rates)..where((t) => t.id.equals('ps5_2_standard')))
+          .go();
+      final b = await book(resourceId: 'void');
+      final board = await boards.load(resourceId: 'void');
+      final choice = ControllerChoice.tracked(requested: 2).reconcile(board);
+      final r = await bookings.checkIn(b, controllers: choice);
+      expect(r.failureOrNull?.code, 'no_rate');
+      expect(r.failureOrNull?.message, 'No price for PS5 with 2 controllers.');
+      expect((await bookingsRepo.getById(b.id))!.status, BookingStatus.booked,
+          reason: 'nothing written on a refused check-in');
+      expect(await sessionsRepo.active(), isEmpty);
+      expect(await held(), isEmpty);
+    });
+
     test('an activity without controllers checks in without pads', () async {
       final b = await book(
           resourceId: 'rift', activity: 'VR', gameId: null, controllers: null);
