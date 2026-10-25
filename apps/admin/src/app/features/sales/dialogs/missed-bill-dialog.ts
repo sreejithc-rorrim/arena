@@ -20,13 +20,14 @@ import { MATERIAL_DEFAULTS } from '../../../shared/material/material-defaults';
 import { formatRupees } from '../../../shared/money/rupees.pipe';
 import { formatIsoDate, istDayStartOf } from '../../../shared/time/ist';
 import { MissedBillApi } from '../data/missed-bill-api';
-import { PAY_METHODS, PayMethod, methodName } from '../data/sale.models';
+import { PAY_METHODS, PayMethod, methodName, parseRupees, rupeesText } from '../data/sale.models';
 
 /**
  * Add missed bill: a single session that was played but never started on the floor. Pick the
  * customer (or walk-in), station, type, game, controllers, date and times; the price comes from
- * the server on the current price list (session_quote). Saving adds it already ended and paid in
- * full by the method picked, with the required reason (session.record; audited).
+ * the server on the current price list (session_quote) and fills in the amount paid, which staff
+ * change to what the customer actually paid. Saving adds it already ended, billed and paid at that
+ * amount by the method picked, with the required reason (session.record; audited).
  */
 @Component({
   selector: 'app-missed-bill-dialog',
@@ -50,7 +51,7 @@ import { PAY_METHODS, PayMethod, methodName } from '../data/sale.models';
         <div class="flex flex-col gap-4 pt-1">
           <p class="text-sm leading-[1.4] text-muted">
             For play that was never started on the floor. It is priced on today's price list and
-            recorded as paid.
+            recorded at the amount the customer actually paid.
           </p>
           <mat-form-field>
             <mat-label>Find member</mat-label>
@@ -158,6 +159,18 @@ import { PAY_METHODS, PayMethod, methodName } from '../data/sale.models';
             }
           </p>
           <mat-form-field>
+            <mat-label>Amount paid (₹)</mat-label>
+            <input
+              matInput
+              inputmode="decimal"
+              autocomplete="off"
+              required
+              [value]="amount()"
+              (input)="setAmount($any($event.target).value)"
+            />
+            <mat-hint [class.text-danger]="amountInvalid()">{{ amountHint() }}</mat-hint>
+          </mat-form-field>
+          <mat-form-field>
             <mat-label>Paid by</mat-label>
             <mat-select [value]="method()" (selectionChange)="method.set($event.value)">
               @for (m of methods; track m) {
@@ -166,7 +179,7 @@ import { PAY_METHODS, PayMethod, methodName } from '../data/sale.models';
             </mat-select>
           </mat-form-field>
           <mat-form-field>
-            <mat-label>Reason</mat-label>
+            <mat-label>Reason (required)</mat-label>
             <input
               matInput
               autocomplete="off"
@@ -184,7 +197,7 @@ import { PAY_METHODS, PayMethod, methodName } from '../data/sale.models';
       </mat-dialog-content>
       <mat-dialog-actions align="end">
         <button mat-button type="button" [disabled]="busy()" (click)="ref.close()">Cancel</button>
-        <button mat-flat-button type="submit" [disabled]="busy()">Add bill</button>
+        <button mat-flat-button type="submit" [disabled]="busy() || !canSave()">Add bill</button>
       </mat-dialog-actions>
     </form>
   `,
@@ -212,6 +225,8 @@ export class MissedBillDialog {
   protected readonly start = signal('18:00');
   protected readonly end = signal('19:00');
   protected readonly method = signal<PayMethod>('cash');
+  /** The amount paid as typed; filled in with each new price until staff type in it. */
+  protected readonly amount = signal('');
   protected readonly reason = signal('');
   protected readonly price = signal<number | null>(null);
   protected readonly quoting = signal(false);
@@ -248,11 +263,45 @@ export class MissedBillDialog {
     const w = this.window();
     return !!w && formatIsoDate(w.end) !== formatIsoDate(w.start);
   });
+  /** The amount paid in paise (0 allowed), or null while it is not an amount. */
+  private readonly paid = computed(() => {
+    const t = this.amount().trim();
+    return /^0+(\.0{1,2})?$/.test(t) ? 0 : parseRupees(t);
+  });
+  protected readonly amountInvalid = computed(
+    () => this.amount().trim() !== '' && this.paid() === null,
+  );
+  /** Under the amount: what is wrong with it, else how it compares with today's price. */
+  protected readonly amountHint = computed(() => {
+    const paid = this.paid();
+    const price = this.price();
+    if (this.amountInvalid()) return 'Enter the amount paid in rupees, like 120 or 120.50';
+    if (paid === null || price === null) return 'What the customer actually paid';
+    const diff = paid - price;
+    if (diff === 0) return "Same as today's price";
+    return `${formatRupees(Math.abs(diff))} ${diff < 0 ? 'less' : 'more'} than today's price`;
+  });
+  /** Everything a save needs: the details priced, an amount paid and a reason. */
+  protected readonly canSave = computed(() => {
+    const t = this.type();
+    return (
+      !!this.stationId() &&
+      !!t &&
+      !!this.window() &&
+      (!t.usesControllers || this.controllers() != null) &&
+      !this.quoting() &&
+      this.price() !== null &&
+      this.paid() !== null &&
+      this.reason().trim() !== ''
+    );
+  });
 
   /** One Save's ids: a resend after a lost answer replays instead of adding twice. */
   private readonly attempt = new Attempt();
   private quoteSeq = 0;
   private findSeq = 0;
+  /** Staff typed the amount: a new price no longer overwrites it. */
+  private amountTyped = false;
 
   constructor() {
     void this.floor.load(['stations', 'games']);
@@ -315,12 +364,19 @@ export class MissedBillDialog {
     void this.requote();
   }
 
+  /** Clearing the field hands it back to the price. */
+  protected setAmount(text: string): void {
+    this.amount.set(text);
+    this.amountTyped = text.trim() !== '';
+  }
+
   private async requote(): Promise<void> {
     const seq = ++this.quoteSeq;
     const t = this.type();
     const w = this.window();
     this.price.set(null);
     this.quoteError.set('');
+    if (!this.amountTyped) this.amount.set('');
     if (!this.stationId() || !t || !w || (t.usesControllers && this.controllers() == null)) {
       this.quoting.set(false);
       return;
@@ -335,7 +391,10 @@ export class MissedBillDialog {
         startedAt: w.start,
         endedAt: w.end,
       });
-      if (seq === this.quoteSeq) this.price.set(total);
+      if (seq === this.quoteSeq) {
+        this.price.set(total);
+        if (!this.amountTyped) this.amount.set(rupeesText(total));
+      }
     } catch (e) {
       if (seq === this.quoteSeq) this.quoteError.set(toAppError(e).message);
     } finally {
@@ -348,8 +407,13 @@ export class MissedBillDialog {
     const t = this.type();
     const w = this.window();
     const price = this.price();
+    const paid = this.paid();
     if (!this.stationId() || !t || !w || price === null) {
       this.error.set('Pick the station and details; the price shows once they are complete');
+      return;
+    }
+    if (paid === null) {
+      this.error.set('Enter the amount paid in rupees, like 120 or 120.50');
       return;
     }
     if (!this.reason().trim()) {
@@ -369,6 +433,7 @@ export class MissedBillDialog {
         endedAt: w.end,
         method: this.method(),
         billedPaise: price,
+        paidPaise: paid,
         reason: this.reason().trim(),
         attempt: this.attempt,
       });

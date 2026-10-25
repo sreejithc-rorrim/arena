@@ -1,8 +1,9 @@
 /// Add a missed bill: a single session that was played but never started in
 /// the app. Pick the customer, station, type, game and controllers, the date and
-/// times, how it was paid, and say why. The server prices it on the current
-/// price list (shown before saving), adds it already ended and paid in full,
-/// and audits the comment. Online only.
+/// times, what the customer actually paid and how, and say why. The server
+/// prices it on the current price list (shown before saving, and filled in as
+/// the amount paid until staff change it), adds it already ended, billed and
+/// paid at the amount paid, and audits the reason. Online only.
 library;
 
 import 'dart:async';
@@ -12,6 +13,7 @@ import 'package:arena_ops/app/providers/core_providers.dart';
 import 'package:arena_ops/app/providers/data_providers.dart';
 import 'package:arena_ops/app/providers/my_bills_providers.dart';
 import 'package:arena_ops/core/money/paise.dart';
+import 'package:arena_ops/core/money/rupee_input.dart';
 import 'package:arena_ops/core/result/result.dart';
 import 'package:arena_ops/core/theme/app_theme.dart';
 import 'package:arena_ops/core/time/ist.dart';
@@ -26,13 +28,16 @@ import 'package:arena_ops/domain/value/enums.dart';
 import 'package:arena_ops/features/new_session/presentation/customer_picker_sheet.dart';
 import 'package:arena_ops/features/new_session/presentation/game_picker_sheet.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-Future<void> showAddMissedBillSheet(
+/// Resolves to the IST day the added bill closed on (where My bills lists it),
+/// or null when nothing was added.
+Future<IstDate?> showAddMissedBillSheet(
   BuildContext context, {
   required IstDate day,
-}) => showModalBottomSheet<void>(
+}) => showModalBottomSheet<IstDate>(
   context: context,
   isScrollControlled: true,
   showDragHandle: true,
@@ -62,6 +67,11 @@ class _AddMissedBillSheetState extends ConsumerState<AddMissedBillSheet> {
   PaymentMethod? _method;
   final _comment = TextEditingController();
 
+  /// What the customer actually paid; filled in with each new price until
+  /// staff type in it.
+  final _amount = TextEditingController();
+  bool _amountTyped = false;
+
   Result<int>? _quote;
   bool _quoting = false;
   int _quoteToken = 0;
@@ -86,7 +96,24 @@ class _AddMissedBillSheetState extends ConsumerState<AddMissedBillSheet> {
   @override
   void dispose() {
     _comment.dispose();
+    _amount.dispose();
     super.dispose();
+  }
+
+  /// Exact paise for the amount paid (0 allowed), or null while it is empty or
+  /// not a rupee amount.
+  int? get _paid => parseRupeesToPaise(_amount.text);
+
+  bool get _amountInvalid => _amount.text.trim().isNotEmpty && _paid == null;
+
+  /// Under the amount paid: how it compares with today's [price].
+  String _amountHelp(int? price) {
+    final paid = _paid;
+    if (paid == null || price == null) return 'What the customer actually paid';
+    final diff = paid - price;
+    if (diff == 0) return 'Same as today\'s price';
+    return '${Paise(diff.abs()).display} ${diff < 0 ? 'less' : 'more'} than '
+        'today\'s price';
   }
 
   /// Start and end as instants; an end at or before the start is the next day.
@@ -147,10 +174,15 @@ class _AddMissedBillSheetState extends ConsumerState<AddMissedBillSheet> {
       setState(() {
         _quote = null;
         _quoting = false;
+        if (!_amountTyped) _amount.clear();
       });
       return;
     }
-    setState(() => _quoting = true);
+    setState(() {
+      _quote = null;
+      _quoting = true;
+      if (!_amountTyped) _amount.clear();
+    });
     final (start, end) = _window;
     final res = await ref
         .read(myBillsRepositoryProvider)
@@ -165,6 +197,10 @@ class _AddMissedBillSheetState extends ConsumerState<AddMissedBillSheet> {
     setState(() {
       _quote = res;
       _quoting = false;
+      final price = res.valueOrNull;
+      if (!_amountTyped && price != null) {
+        _amount.text = paiseToRupeeInput(price);
+      }
     });
   }
 
@@ -243,17 +279,28 @@ class _AddMissedBillSheetState extends ConsumerState<AddMissedBillSheet> {
         code: 'invalid_payload',
       );
     }
-    if (_quote?.valueOrNull == null) {
+    // No price for these details: the price line says why, this what to do.
+    if (_quote case Err(failure: final f) when !_quoting) {
+      return Failure(message: f.fix ?? f.message, code: f.code);
+    }
+    if (_quoting || _quote?.valueOrNull == null) {
       return const Failure(
         message: 'Wait for the price.',
         fix: 'It shows once the details are picked.',
         code: 'invalid_payload',
       );
     }
+    if (_paid == null) {
+      return const Failure(
+        message: 'Enter what the customer paid.',
+        fix: rupeeInputError,
+        code: 'invalid_total',
+      );
+    }
     if (_comment.text.trim().isEmpty) {
       return const Failure(
         message: 'Say why the bill is added later.',
-        fix: 'Add a short comment.',
+        fix: 'Add a short reason.',
         code: 'reason_required',
       );
     }
@@ -271,6 +318,7 @@ class _AddMissedBillSheetState extends ConsumerState<AddMissedBillSheet> {
     final method = _method ?? methods.first;
     final (start, end) = _window;
     final total = _quote!.valueOrNull!;
+    final paid = _paid!;
     final actions = ref.read(billEditActionsProvider);
     final cmd =
         _unsent ??
@@ -284,15 +332,18 @@ class _AddMissedBillSheetState extends ConsumerState<AddMissedBillSheet> {
           endedAt: end,
           method: method,
           billedPaise: total,
+          paidPaise: paid,
           reason: _comment.text,
         );
     final ok = await confirmAction(
       context,
-      title: 'Add this bill for ${Paise(total).display}?',
+      title: 'Add this bill for ${Paise(paid).display}?',
       message:
           '${_customer!.displayName} on ${_station!.name}, '
           '${IstTime.format12(start)} → ${IstTime.format12(end)}, '
-          'paid by ${method.label}. It is recorded as added later, with your comment, '
+          'paid by ${method.label}.'
+          '${paid == total ? '' : ' Today\'s price is ${Paise(total).display}.'}'
+          ' It is recorded as added later, with your reason, '
           'and the owner can see it.',
       confirm: 'Add bill',
     );
@@ -305,8 +356,9 @@ class _AddMissedBillSheetState extends ConsumerState<AddMissedBillSheet> {
     if (!mounted) return;
     switch (res) {
       case Ok(value: final billed):
-        ref.invalidate(myBillsForDayProvider(IstDate.fromUtc(end)));
-        Navigator.of(context).pop();
+        final closedOn = IstDate.fromUtc(end);
+        ref.invalidate(myBillsForDayProvider(closedOn));
+        Navigator.of(context).pop(closedOn);
         showToast(context, 'Bill added: ${Paise(billed).display}.');
       case Err(failure: final f):
         setState(() {
@@ -332,6 +384,8 @@ class _AddMissedBillSheetState extends ConsumerState<AddMissedBillSheet> {
         : _typesFor(_station!, activities);
     final (start, end) = _window;
     final overnight = IstDate.fromUtc(end) != IstDate.fromUtc(start);
+    // Add bill stays off until this is null; the reason shows under it.
+    final missing = _missing(a);
 
     return SafeArea(
       child: Padding(
@@ -353,7 +407,7 @@ class _AddMissedBillSheetState extends ConsumerState<AddMissedBillSheet> {
               const SizedBox(height: AppSpacing.xs),
               Text(
                 'For play that was never started in the app. It is priced on today\'s '
-                'price list and recorded as paid.',
+                'price list and recorded at the amount the customer actually paid.',
                 style: ArenaType.caption.copyWith(color: arena.textMuted),
               ),
               const SizedBox(height: AppSpacing.md),
@@ -482,6 +536,29 @@ class _AddMissedBillSheetState extends ConsumerState<AddMissedBillSheet> {
                       ),
               ),
               const SizedBox(height: AppSpacing.md),
+              TextField(
+                key: const ValueKey('missed-bill-amount'),
+                controller: _amount,
+                enabled: !_busy,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                ],
+                decoration: InputDecoration(
+                  labelText: 'Amount paid (₹)',
+                  prefixText: '₹ ',
+                  helperText: _amountHelp(_quoting ? null : _quote?.valueOrNull),
+                  errorText: _amountInvalid ? rupeeInputError : null,
+                ),
+                onChanged: (text) => setState(() {
+                  _amountTyped = text.trim().isNotEmpty;
+                  _unsent = null;
+                  _failure = null;
+                }),
+              ),
+              const SizedBox(height: AppSpacing.md),
               Text(
                 'Paid by',
                 style: ArenaType.label.copyWith(color: arena.text),
@@ -503,8 +580,8 @@ class _AddMissedBillSheetState extends ConsumerState<AddMissedBillSheet> {
                 minLines: 2,
                 maxLines: 4,
                 decoration: const InputDecoration(
-                  labelText: 'Comment (required)',
-                  hintText: 'Why it was not started in the app',
+                  labelText: 'Reason (required)',
+                  hintText: 'Why it was not started on the floor',
                 ),
                 onChanged: (_) => setState(() {
                   _unsent = null;
@@ -527,7 +604,10 @@ class _AddMissedBillSheetState extends ConsumerState<AddMissedBillSheet> {
               SizedBox(
                 height: AppSpacing.minTarget,
                 child: FilledButton(
-                  onPressed: _busy ? null : () => _save(methods),
+                  key: const ValueKey('missed-bill-save'),
+                  onPressed: _busy || missing != null
+                      ? null
+                      : () => _save(methods),
                   child: Text(
                     _busy
                         ? 'Adding…'
@@ -537,6 +617,15 @@ class _AddMissedBillSheetState extends ConsumerState<AddMissedBillSheet> {
                   ),
                 ),
               ),
+              if (missing != null && !_busy) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  missing.message,
+                  key: const ValueKey('missed-bill-missing'),
+                  textAlign: TextAlign.center,
+                  style: ArenaType.caption.copyWith(color: arena.textMuted),
+                ),
+              ],
             ],
           ),
         ),

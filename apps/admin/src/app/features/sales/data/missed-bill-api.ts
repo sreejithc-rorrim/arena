@@ -20,8 +20,10 @@ export interface MissedPlay {
 export interface MissedBill extends MissedPlay {
   readonly customerId: string | null;
   readonly method: PayMethod;
-  /** The total the owner was shown (session_quote); the server refuses any other. */
+  /** The price the owner was shown (session_quote); the server refuses any other. */
   readonly billedPaise: number;
+  /** What the customer actually paid (0 or more): the bill is recorded at this amount. */
+  readonly paidPaise: number;
   readonly reason: string;
   readonly attempt: Attempt;
 }
@@ -36,12 +38,14 @@ export const MISSED_BILL_MESSAGES: Readonly<Record<string, string>> = {
   no_rate: 'There is no price for that type and controller count',
   activity_not_offered: 'That station does not offer this type',
   price_mismatch: 'The price changed. Check the new price and save again',
+  invalid_total: 'Enter the amount paid in rupees, 0 or more',
   invalid_payload: 'Pick the station, times and payment method',
 };
 
 /**
  * Missed bills (bill_edit; owners hold it): the price of a past single session on the current
- * price list (session_quote), and adding it already ended and paid (session.record).
+ * price list (session_quote), and adding it already ended and paid what the customer actually
+ * paid (session.record).
  */
 @Service()
 export class MissedBillApi {
@@ -90,6 +94,7 @@ export class MissedBillApi {
         ended_at: bill.endedAt.toISOString(),
         method: bill.method,
         billed_amount_paise: bill.billedPaise,
+        paid_amount_paise: bill.paidPaise,
         reason: bill.reason,
       },
     });

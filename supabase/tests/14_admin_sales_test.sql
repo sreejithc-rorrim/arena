@@ -160,7 +160,7 @@ select is((select pg_temp.bill(l, 'a1400000-0000-0000-0000-00000000000a')
     'billed_paise', 12000, 'paid_paise', 12000, 'refunded_paise', 0,
     'methods', jsonb_build_object('upi', 10000, 'cash', 2000),
     'started_by', 'Staff', 'void_reason', null, 'voided_at', null, 'voided_by', null,
-    'discount_paise', 0, 'discount', null),
+    'discount_paise', 0, 'discount', null, 'quoted_paise', null),
   'A: billed ₹120, paid by method, station, activity, started by Staff');
 select is((select (pg_temp.bill(l, 'a1400000-0000-0000-0000-00000000000a')->>'at')::timestamptz from day),
   '2026-10-01T10:00:00Z'::timestamptz, 'A closed at its end');
