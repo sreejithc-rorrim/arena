@@ -53,6 +53,10 @@ together.
 - Floor app End sheet: bill lines show their exact amounts (₹37.50, as in Sales) and cash rounding
   gets its own "Rounding" line, so the lines add up to the total. Amounts charged are unchanged
   (#22).
+- Floor app booking check-in: a station whose session is still running, overtime included, is
+  never offered. An any-system booking goes to a free station, and the other free ones are chips
+  staff can pick instead. A booking for a station still in use says so ("HEX is still in use.")
+  instead of failing only at "Check in & start" (#20).
 
 ## [0.0.1-alpha.1] - 2026-10-24
 
