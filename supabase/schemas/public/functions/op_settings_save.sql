@@ -11,7 +11,7 @@ declare v_json jsonb := p->'json';
 begin
   perform _need(p_arena, 'settings');
   if (p->>'key') not in ('business_hours', 'floor_options', 'discount_options', 'venue_profile',
-                         'attendance', 'work_hours', 'leave_rules', 'offline_rules') then
+                         'offline_rules') then
     raise exception 'setting_not_shared' using hint = coalesce(p->>'key', 'null');
   end if;
   if p->>'key' = 'floor_options' then
@@ -20,12 +20,6 @@ begin
     v_json := _discount_options(p->'json');
   elsif p->>'key' = 'venue_profile' then
     v_json := _venue_profile(p->'json');
-  elsif p->>'key' = 'attendance' then
-    v_json := _attendance_settings(p->'json');
-  elsif p->>'key' = 'work_hours' then
-    v_json := _work_hours_settings(p->'json');
-  elsif p->>'key' = 'leave_rules' then
-    v_json := _leave_rules_settings(p->'json');
   elsif p->>'key' = 'offline_rules' then
     v_json := _offline_rules(p->'json');
   end if;

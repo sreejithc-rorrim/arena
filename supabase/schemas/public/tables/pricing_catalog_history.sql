@@ -2,7 +2,7 @@
 --
 -- When an op changes the arena's price list (rates, policy, business hours or
 -- holidays), _sync_apply stores the previous list here in canonical form
--- (_pricing_canon). session.start / group.create accept a device's pricing
+-- (_pricing_canon). session.start accepts a device's pricing
 -- snapshot if it equals the live list or one retired within _pricing_grace()
 -- (72 h) (_assert_snapshot). Server-only: no RLS policy, no client grants, not
 -- synced. One row per distinct list; re-retiring it refreshes retired_at.

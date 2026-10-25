@@ -7,7 +7,6 @@ import 'package:arena_ops/domain/entities/booking.dart';
 import 'package:arena_ops/domain/entities/controller.dart';
 import 'package:arena_ops/domain/entities/customer.dart';
 import 'package:arena_ops/domain/entities/game.dart';
-import 'package:arena_ops/domain/entities/group_session.dart';
 import 'package:arena_ops/domain/entities/payment.dart';
 import 'package:arena_ops/domain/entities/resource.dart';
 import 'package:arena_ops/domain/entities/session.dart';
@@ -163,80 +162,6 @@ SessionExtension extensionFromRow(SessionExtensionRow r) => SessionExtension(
       oldEndAt: r.oldEndAt,
       newEndAt: r.newEndAt,
       addedAmountPaise: r.addedAmountPaise,
-      reason: r.reason,
-      createdAt: r.createdAt,
-    );
-
-GroupSession groupSessionFromRow(GroupSessionRow r) => GroupSession(
-      id: r.id,
-      primaryCustomerId: r.primaryCustomerId,
-      playerCount: r.playerCount,
-      purchasedControllerCount: r.purchasedControllerCount,
-      status: GroupSessionStatus.fromCode(r.status),
-      paymentStatus: PaymentStatus.fromCode(r.paymentStatus),
-      startedAt: r.startedAt,
-      scheduledEndAt: r.scheduledEndAt,
-      actualEndedAt: r.actualEndedAt,
-      pricingSnapshot: r.pricingSnapshot,
-      billingMode: GroupBillingMode.fromCode(r.billingMode),
-      billedAmountPaise: r.billedAmountPaise,
-      voidReason: r.voidReason,
-      createdAt: r.createdAt,
-      updatedAt: r.updatedAt,
-    );
-
-GroupAssignment groupAssignmentFromRow(GroupAssignmentRow r) => GroupAssignment(
-      id: r.id,
-      groupId: r.groupId,
-      playerNumber: r.playerNumber,
-      playerLabel: r.playerLabel,
-      index: r.index,
-      resourceId: r.resourceId,
-      activityCode: r.activityCode,
-      gameId: r.gameId,
-      controllerCount: r.controllerCount,
-      startedAt: r.startedAt,
-      endedAt: r.endedAt,
-      createdAt: r.createdAt,
-    );
-
-GroupExtension groupExtensionFromRow(GroupExtensionRow r) => GroupExtension(
-      id: r.id,
-      groupId: r.groupId,
-      addedMinutes: r.addedMinutes,
-      oldEndAt: r.oldEndAt,
-      newEndAt: r.newEndAt,
-      addedAmountPaise: r.addedAmountPaise,
-      reason: r.reason,
-      createdAt: r.createdAt,
-    );
-
-GroupCharge groupChargeFromRow(GroupChargeRow r) => GroupCharge(
-      id: r.id,
-      groupId: r.groupId,
-      assignmentId: r.assignmentId,
-      playerNumber: r.playerNumber,
-      chargeIndex: r.chargeIndex,
-      bandCode: r.bandCode,
-      activityCode: r.activityCode,
-      resourceId: r.resourceId,
-      controllerCount: r.controllerCount,
-      segmentStart: r.segmentStart,
-      segmentEnd: r.segmentEnd,
-      playedMinutes: r.playedMinutes,
-      billedMinutes: r.billedMinutes,
-      unitMinutes: r.unitMinutes,
-      unitPricePaise: r.unitPricePaise,
-      amountPaise: r.amountPaise,
-    );
-
-GroupPayment groupPaymentFromRow(GroupPaymentRow r) => GroupPayment(
-      id: r.id,
-      groupId: r.groupId,
-      amountPaise: r.amountPaise,
-      method: PaymentMethod.fromCode(r.method),
-      isRefund: r.isRefund,
-      note: r.note,
       reason: r.reason,
       createdAt: r.createdAt,
     );

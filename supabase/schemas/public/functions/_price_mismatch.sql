@@ -1,8 +1,7 @@
 -- _price_mismatch(p_what, p_server, p_device) — raise the price_mismatch error.
 --
 -- Always raises 'price_mismatch' with hint '<what>: server <n> paise, device <n|none> paise'.
--- Called with 'bill' by op_session_end / op_group_end and 'extension' by op_session_extend /
--- op_group_extend when the device's money differs from the server's by any amount (0 tolerance).
+-- Called with 'bill' by op_session_end and 'extension' by op_session_extend when the device's money differs from the server's by any amount (0 tolerance).
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._price_mismatch (
   p_what   text,

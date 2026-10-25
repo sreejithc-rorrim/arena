@@ -1,12 +1,20 @@
 import { formatRupees } from '../../../shared/money/rupees.pipe';
-import { formatDate, formatMinutes, istDayStart } from '../../../shared/time/ist';
+import {
+  addDays,
+  formatDate,
+  formatIsoDate,
+  formatMinutes,
+  istDayStart,
+  istDayStartOf,
+} from '../../../shared/time/ist';
 import { WeekWindows } from '../../pricing/data/pricing.models';
 import { Bill, PayMethod } from '../../sales/data/sale.models';
 
-export type Period = 'today' | '7d' | '30d' | '12m';
+export type Period = 'today' | 'day' | '7d' | '30d' | '12m';
 
 export const PERIODS: readonly { readonly key: Period; readonly label: string }[] = [
   { key: 'today', label: 'Today' },
+  { key: 'day', label: 'Day' },
   { key: '7d', label: '7d' },
   { key: '30d', label: '30d' },
   { key: '12m', label: '12m' },
@@ -14,6 +22,16 @@ export const PERIODS: readonly { readonly key: Period; readonly label: string }[
 
 export function asPeriod(value: string | undefined): Period {
   return PERIODS.some((p) => p.key === value) ? (value as Period) : 'today';
+}
+
+/** The IST date of yesterday ("2026-10-23"): the newest day the Day period can show. */
+export function yesterdayOf(now: Date): string {
+  return formatIsoDate(istDayStart(now, 1));
+}
+
+/** `?day=` as a past IST date; `yesterday` when missing, malformed, today or later. */
+export function asDay(value: string | undefined, yesterday: string): string {
+  return value && istDayStartOf(value) && value <= yesterday ? value : yesterday;
 }
 
 const IST_OFFSET_MS = 330 * 60_000;
@@ -40,10 +58,25 @@ export interface PeriodRange {
   readonly compare: string;
 }
 
-/** The period and the one before it, as [from, to) instants on IST calendar boundaries. */
-export function periodRange(period: Period, now: Date): PeriodRange {
+/**
+ * The period and the one before it, as [from, to) instants on IST calendar boundaries. `day` is
+ * the IST date the Day period shows (see asDay).
+ */
+export function periodRange(period: Period, now: Date, day = yesterdayOf(now)): PeriodRange {
   const tomorrow = istDayStart(now, -1);
   switch (period) {
+    case 'day': {
+      const from = istDayStartOf(day) ?? istDayStart(now, 1);
+      const yesterday = day === yesterdayOf(now);
+      return {
+        from,
+        to: istDayStartOf(addDays(day, 1)) ?? istDayStart(now),
+        prevFrom: istDayStartOf(addDays(day, -1)) ?? istDayStart(now, 2),
+        prevTo: from,
+        label: yesterday ? 'Yesterday' : dayLabel.format(from),
+        compare: 'vs the day before',
+      };
+    }
     case 'today':
       return {
         from: istDayStart(now),
@@ -97,14 +130,18 @@ export interface OverviewData {
   /** Billed per station type code, from the bill lines. */
   readonly byType: ReadonlyMap<string, number>;
   readonly topGames: readonly { readonly name: string; readonly minutes: number }[];
-  readonly byStaff: readonly { readonly name: string; readonly bills: number; readonly paise: number }[];
+  readonly byStaff: readonly {
+    readonly name: string;
+    readonly bills: number;
+    readonly paise: number;
+  }[];
   /** The newest bills closed today (any status). */
   readonly latest: readonly Bill[];
 }
 
 /** The bucket a period's chart is drawn in. */
 export function bucketOf(period: Period): 'hour' | 'day' | 'month' {
-  return period === 'today' ? 'hour' : period === '12m' ? 'month' : 'day';
+  return period === 'today' || period === 'day' ? 'hour' : period === '12m' ? 'month' : 'day';
 }
 
 /** Totals with the average bill worked out. */
@@ -127,7 +164,10 @@ export interface Bar {
   readonly future: boolean;
 }
 
-/** Takings bars: by hour today (opening hours, widened to any takings), by day, or by month. */
+/**
+ * Takings bars: by hour for today or one day (that weekday's opening hours, widened to any
+ * takings), by day, or by month.
+ */
 export function takingsBars(
   period: Period,
   range: PeriodRange,
@@ -136,13 +176,15 @@ export function takingsBars(
   now: Date,
 ): Bar[] {
   const live = buckets.map((b) => ({ at: b.start, paidPaise: b.paise }));
-  if (period === 'today') {
-    const weekday = String(((new Date(now.getTime() + IST_OFFSET_MS).getUTCDay() + 6) % 7) + 1);
+  if (period === 'today' || period === 'day') {
+    const weekday = String(
+      ((new Date(range.from.getTime() + IST_OFFSET_MS).getUTCDay() + 6) % 7) + 1,
+    );
     const w = open?.[weekday];
     const hours = live.map((b) => ist(new Date(b.at)).h);
     const first = Math.min(w ? Math.floor(w.start / 60) : 10, ...hours);
     const last = Math.max(w ? Math.ceil(w.end / 60) - 1 : 23, ...hours);
-    const nowHour = ist(now).h;
+    const nowHour = period === 'today' ? ist(now).h : 24;
     return Array.from({ length: last - first + 1 }, (_, k) => {
       const h = first + k;
       const paise = live
@@ -192,6 +234,14 @@ export function takingsBars(
     return { paise, label, tip: `${formatDate(start)} · ${formatRupees(paise)}`, future: false };
   });
 }
+
+/** "Fri, 23 Oct" */
+const dayLabel = new Intl.DateTimeFormat('en-IN', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'Asia/Kolkata',
+});
 
 function hourLabel(h: number): string {
   return `${h % 12 || 12}${h >= 12 && h < 24 ? 'pm' : 'am'}`;

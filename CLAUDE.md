@@ -6,10 +6,9 @@
 
 | Doc | When |
 |---|---|
-| `docs/OWNER_CONFIRMATION.md` | Unconfirmed / decided business rules (pricing #rows, staff S-rows) |
+| `docs/OWNER_CONFIRMATION.md` | Unconfirmed / decided business rules (pricing #rows; staff S-rows are history, the module was removed) |
 | `docs/SYNC.md` | Outbox, `sync_push`/`sync_pull`, conflicts, server time |
 | `docs/GENERALIZATION.md` | Multi-venue design |
-| `docs/STAFF.md` / `docs/STAFF_API.md` | Attendance, leave, salary: design / server contract (ops, codes, tables, RPCs) |
 | `docs/RELEASE.md`, `docs/DEPLOY_SUPABASE.md` | Release, backup, going live |
 | `supabase/README.md` | Tables / functions / security map, pgTAP index |
 | `apps/admin/CLAUDE.md` | Angular rules (always follow for admin work) |
@@ -26,8 +25,8 @@
 
 ## Scope (SLC)
 
-- Flutter app = **staff only** (floor: sessions, payments, groups, bookings, controllers, members, own attendance and leave — per permission). Its owner screens (Today, Money, Reports, Settings) will be hidden later; never build or extend owner features there.
-- **All owner features live on the admin web** (`apps/admin/`): sales, reports, voids, stations, games, pricing, users, settings, staff (shifts, corrections, leave approvals, pay setup, payroll).
+- Flutter app = **staff only** (floor: sessions, payments, bookings, controllers, members, own profile and bills — per permission). Owner screens (Today, Money, Reports, Settings, device game editing) were removed 2026-10-24: everyone lands on the Floor; never build owner features there.
+- **All owner features live on the admin web** (`apps/admin/`): sales, reports, voids, stations, games, pricing, users, settings, staff (team, access, terms).
 - UI direction = the screens already built (reuse their layout and shared components). No design export to follow.
 
 ## Layout
@@ -58,13 +57,13 @@ Security rules (asserted by `supabase/tests/13_security_hardening_test.sql`):
 - 42501 on a client RPC = refusal or a call without a session: fix the client, never grant to `anon`.
 - Joining = invitation only (`invite_member` → Auth e-mail → `/accept-invite` → `accept_invite`); owners self-register via `create_my_arena`; non-magic-link logins choose a password first. No service-role key anywhere in the apps or repo. No Edge Functions.
 
-Permissions: `text[]` on `staff_profiles`, list in `_known_perms()` (start, bill, discount, members, stations, money, reports, settings, attendance_review, leave_approve, payroll, payroll_finalise, bill_edit, bill_record, time_request). `role='owner'` holds all. `money`/`reports` = owner level; only owner level grants money, reports, payroll, payroll_finalise, bill_edit, bill_record. Nobody changes their own permissions.
+Permissions: `text[]` on `staff_profiles`, list in `_known_perms()` (start, bill, discount, members, stations, money, reports, settings, bill_edit, bill_record). `role='owner'` holds all. `money`/`reports` = owner level; only owner level grants money, reports, bill_edit, bill_record. Nobody changes their own permissions.
 
 ## Mobile architecture (`apps/mobile/lib/`, dependencies point inward)
 
 - `core/` — `Clock`, `Result`/`Failure`, money (paise, rounding, rupee input), IST time, theme, shared widgets.
-- `domain/` — pure Dart: Freezed entities, repository interfaces, commands, `pricing/`, `services/`, `reports/`, `auth/` (`PermissionGuard`), `attendance/`, `leave/`.
-- `data/local/` — Drift (`database.dart`, `Local*Repository`, `db_safety.dart`); `data/sync/` + `app/sync/` — outbox, `sync_push`/`sync_pull`, realtime nudge; `data/remote/` — online-only repositories (attendance, leave) via `online_calls.dart`.
+- `domain/` — pure Dart: Freezed entities, repository interfaces, commands, `pricing/`, `services/`, `reports/`, `auth/` (`PermissionGuard`), `profile/`.
+- `data/local/` — Drift (`database.dart`, `Local*Repository`, `db_safety.dart`); `data/sync/` + `app/sync/` — outbox, `sync_push`/`sync_pull`, realtime nudge; `data/remote/` — online-only repositories (profile, terms, my bills) via `online_calls.dart`.
 - `app/` — Riverpod providers, go_router, action controllers (`controllers/*_actions.dart`); `app/sync/cloud_root.dart` overrides cloud-only providers.
 - `features/<area>/` — screens and sheets.
 
@@ -83,12 +82,9 @@ Invariants:
 
 Drift schema change (the device DB is the only copy of the day's takings; `DbSafety.protect` backs it up first): bump `AppDatabase.expectedSchemaVersion`; add an **additive** step to `_steps` (`_steps[n]` = v`n` → v`n+1`; never drop/rewrite user rows). A gap falls through to a destructive rebuild.
 
-## Staff module (attendance, leave, salary)
+## Staff-time module: removed
 
-- **Online only, not in `sync_pull`**: apps read via RLS selects and RPCs (`attendance_days`, `leave_balances`); the floor app sends ops straight to `sync_push` (no outbox). Server time stamps punches; device time is evidence only. Op id = row id so resends replay.
-- One day calculation, `_att_day`, feeds the floor history, the admin calendar and salary (`_pay_build_line`) — never recompute it in the apps.
-- Pay is admin-web only (`payroll` perms); staff read no pay at all. A finalised salary run locks its period (`period_finalised`).
-- Contract and refusal codes: `docs/STAFF_API.md`.
+Attendance, GPS clock-in, shifts, leave, pay setup and payroll were removed on 2026-10-24 (never released). Rebuild from the git tag `staff-module-archive` (code, schema, tests, `docs/STAFF.md`, `docs/STAFF_API.md`) only on a new requirement; the old decisions are the S-rows in `docs/OWNER_CONFIRMATION.md`.
 
 ## Lean development mode
 
@@ -117,6 +113,5 @@ After implementing: **Implemented** (what changed) · **Files** (key ones) · **
 
 - 7 admin specs fail on HEAD (auth "register…", 5 settings, stations "shows a station…"): outdated wording.
 - Admin initial bundle exceeds its 500 kB budget.
-- Admin web admits only owner-level logins, so a `leave_approve`-only member cannot approve anywhere yet.
 - `pushOps` (admin) surfaces refusal codes but not the server hint.
-- Not built yet: push notifications (FCM), who's-in board, shared clock-in tablet.
+- Not built yet: push notifications (FCM).

@@ -22,9 +22,9 @@ abstract interface class BookingRepository {
   Future<Booking?> getById(String id);
 
   /// Save a new booking. A `booked` booking on a specific station is
-  /// re-checked against that station's other bookings, open sessions and
-  /// group assignments in the same transaction; throws [BookingConflict]
-  /// (writing nothing) if the slot is no longer free.
+  /// re-checked against that station's other bookings and open sessions in
+  /// the same transaction; throws [BookingConflict] (writing nothing) if the
+  /// slot is no longer free.
   Future<Booking> create(Booking booking);
 
   /// Edit an existing booking (spec §18 — staff can amend a reservation).

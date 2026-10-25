@@ -1,5 +1,4 @@
 import 'package:arena_ops/domain/entities/activity.dart';
-import 'package:arena_ops/domain/services/group_activity.dart';
 import 'package:meta/meta.dart';
 
 /// Which optional parts of the app this venue uses, worked out from its active station types —
@@ -14,19 +13,17 @@ class VenueCapabilities {
   const VenueCapabilities({
     required this.games,
     required this.equipment,
-    required this.groups,
   });
 
   /// Everything on: what the floor shows while the catalog is still loading, so a console
   /// venue never sees its screens flicker away.
-  static const all = VenueCapabilities(games: true, equipment: true, groups: true);
+  static const all = VenueCapabilities(games: true, equipment: true);
 
   factory VenueCapabilities.of(List<Activity> activities) {
     final active = activities.where((a) => a.active);
     return VenueCapabilities(
       games: active.any((a) => a.usesGames),
       equipment: active.any((a) => a.usesControllers),
-      groups: groupActivityCode(activities) != null,
     );
   }
 
@@ -36,16 +33,12 @@ class VenueCapabilities {
   /// A type uses controllers: the controller board, pads per station, controller counts.
   final bool equipment;
 
-  /// Group sessions can be started (a type using both controllers and games).
-  final bool groups;
-
   @override
   bool operator ==(Object other) =>
       other is VenueCapabilities &&
       other.games == games &&
-      other.equipment == equipment &&
-      other.groups == groups;
+      other.equipment == equipment;
 
   @override
-  int get hashCode => Object.hash(games, equipment, groups);
+  int get hashCode => Object.hash(games, equipment);
 }

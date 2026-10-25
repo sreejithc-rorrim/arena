@@ -6,7 +6,7 @@
 -- Exactly one of p_resource / p_customer. Returns {bills, games}:
 --   bills — the newest p_limit (1–50, default 6) bills with play on the station
 --           (or of the member) that started since p_since, or are running:
---           [{bill_id, kind, started_at, status, billed_paise, customer (null for
+--           [{bill_id, kind (always 'single'), started_at, status, billed_paise, customer (null for
 --           a walk-in), station, game}] (station / game of that bill's latest
 --           play there); voided bills included, so the list shows them as Void;
 --   games — for a member: [{game_id, name, minutes}] minutes per game played
@@ -42,12 +42,6 @@ begin
       from session_segments g join sessions s on s.id = g.session_id
      where g.arena_id = p_arena and (g.started_at >= p_since or g.ended_at is null)
        and (g.resource_id = p_resource or s.customer_id = p_customer)
-    union all
-    select 'group', a.group_id, gs.status, gs.primary_customer_id, a.resource_id, a.game_id,
-           a.started_at, gs.billed_amount_paise
-      from group_assignments a join group_sessions gs on gs.id = a.group_id
-     where a.arena_id = p_arena and (a.started_at >= p_since or a.ended_at is null)
-       and (a.resource_id = p_resource or gs.primary_customer_id = p_customer)
   ), latest as (
     select distinct on (kind, bill_id) * from pl order by kind, bill_id, started_at desc
   )

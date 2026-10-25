@@ -2,6 +2,8 @@ import { Component, computed, effect, inject, input } from '@angular/core';
 import { MatAnchor, MatButton } from '@angular/material/button';
 import { MatButtonToggle, MatButtonToggleGroup } from '@angular/material/button-toggle';
 import { MatCard } from '@angular/material/card';
+import { MatFormField, MatLabel } from '@angular/material/form-field';
+import { MatInput } from '@angular/material/input';
 import { MatProgressBar } from '@angular/material/progress-bar';
 import { Router, RouterLink } from '@angular/router';
 import { ArenaContext } from '../../core/arena/arena-context';
@@ -18,6 +20,7 @@ import { OverviewStore } from './data/overview-store';
 import {
   PERIODS,
   Period,
+  asDay,
   asPeriod,
   chartScale,
   delta,
@@ -25,6 +28,7 @@ import {
   takingsBars,
   topGames,
   withAverage,
+  yesterdayOf,
 } from './data/overview.models';
 
 interface SetupItem {
@@ -53,6 +57,9 @@ interface SetupItem {
     MatButtonToggleGroup,
     MatButtonToggle,
     MatCard,
+    MatFormField,
+    MatInput,
+    MatLabel,
     MatProgressBar,
   ],
   host: { class: 'flex min-h-full flex-wrap content-start' },
@@ -119,11 +126,23 @@ interface SetupItem {
             </section>
           </mat-card>
         }
+        @if (period() === 'day') {
+          <mat-form-field class="w-44" subscriptSizing="dynamic">
+            <mat-label>Day</mat-label>
+            <input
+              matInput
+              type="date"
+              [value]="day()"
+              [max]="yesterday()"
+              (change)="pickDay($any($event.target).value)"
+            />
+          </mat-form-field>
+        }
         <p class="text-sm leading-[1.4] text-muted">{{ subtitle() }}</p>
         @if (store.loadError(); as error) {
           <div class="flex flex-col items-start gap-3">
             <p role="alert" class="text-sm text-danger">{{ error }}</p>
-            <button mat-stroked-button type="button" (click)="store.load(period(), true)">
+            <button mat-stroked-button type="button" (click)="store.load(period(), day(), true)">
               Try again
             </button>
           </div>
@@ -389,14 +408,18 @@ export class OverviewPage {
   );
   private readonly router = inject(Router);
 
-  /** `?period=` — today | 7d | 30d | 12m (default today). */
+  /** `?period=` — today | day | 7d | 30d | 12m (default today). */
   readonly periodParam = input<string>(undefined, { alias: 'period' });
+  /** `?day=` — the IST date (YYYY-MM-DD) the Day period shows (default yesterday). */
+  readonly dayParam = input<string>(undefined, { alias: 'day' });
 
   protected readonly periods = PERIODS;
   protected readonly rupees = formatRupees;
   protected readonly initials = initials;
   protected readonly now = injectNow();
   protected readonly period = computed(() => asPeriod(this.periodParam()));
+  protected readonly yesterday = computed(() => yesterdayOf(this.now()));
+  protected readonly day = computed(() => asDay(this.dayParam(), this.yesterday()));
 
   private readonly none = withAverage({ takingsPaise: 0, bills: 0, minutes: 0 });
   private readonly current = computed(() => this.store.data()?.totals ?? this.none);
@@ -484,7 +507,7 @@ export class OverviewPage {
 
   constructor() {
     effect(() => {
-      if (this.arena.current().id) void this.store.load(this.period());
+      if (this.arena.current().id) void this.store.load(this.period(), this.day());
     });
     effect(() => {
       if (!this.arena.current().id) return;
@@ -504,7 +527,14 @@ export class OverviewPage {
 
   protected pick(period: Period): void {
     void this.router.navigate([], {
-      queryParams: { period: period === 'today' ? null : period },
+      queryParams: { period: period === 'today' ? null : period, day: null },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  protected pickDay(day: string): void {
+    void this.router.navigate([], {
+      queryParams: { day: day && day !== this.yesterday() ? day : null },
       queryParamsHandling: 'merge',
     });
   }

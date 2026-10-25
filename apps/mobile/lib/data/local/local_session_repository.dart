@@ -823,12 +823,6 @@ class LocalSessionRepository implements SessionRepository {
           ..where((t) => t.resourceId.equals(resourceId) & t.endedAt.isNull()))
         .getSingleOrNull();
     if (busy != null) throw _ResourceBusy(resourceName);
-    // A group may also be using this resource (group feature §7): an open group
-    // assignment makes the station just as busy for a single session.
-    final groupBusy = await (_db.select(_db.groupAssignments)
-          ..where((t) => t.resourceId.equals(resourceId) & t.endedAt.isNull()))
-        .getSingleOrNull();
-    if (groupBusy != null) throw _ResourceBusy(resourceName);
   }
 
   /// Refuses to *put* a session on a station that is not available.
@@ -864,10 +858,9 @@ class LocalSessionRepository implements SessionRepository {
 
   /// Refuses a game that this station cannot actually run.
   ///
-  /// The group path has always checked this; the single-session path only
-  /// filtered the game picker, so a stale sheet — or a station switch that
-  /// carried the current game onto a system without it — could start a session
-  /// on a disc that is scratched, uninstalled or region-locked. Absence of a
+  /// Checked here, not only in the game picker: a stale sheet — or a station
+  /// switch that carried the current game onto a system without it — could
+  /// start a session on a disc that is scratched, uninstalled or region-locked. Absence of a
   /// compatibility row means the game is not installed there.
   Future<void> _ensureGamePlayable(
       String? gameId, String resourceId, String resourceName) async {

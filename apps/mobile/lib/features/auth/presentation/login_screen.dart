@@ -8,7 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// PIN login (design): pick who's on shift, then enter a 4-digit PIN. Staff land
-/// on the Floor, owners on Today — handled by the router once signed in.
+/// on the Floor, owners too — handled by the router once signed in.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 

@@ -135,7 +135,6 @@ export class SampleFloorApi extends FloorApi {
       o: Partial<Play> & Pick<Play, 'billId' | 'customerId' | 'resourceId' | 'startedAt'>,
     ): Play => ({
       id,
-      kind: 'single',
       billStatus: 'completed',
       activityCode: 'PS5',
       gameId: null,
@@ -145,7 +144,7 @@ export class SampleFloorApi extends FloorApi {
       ...o,
     });
     this.playList = [
-      // Live: HEX ends in 25 minutes, VOID (a group of two) in 8.
+      // Live: HEX ends in 25 minutes, VOID (two controllers) in 8.
       play('p-live-hex', {
         billId: 'b-live-hex',
         billStatus: 'active',
@@ -156,18 +155,16 @@ export class SampleFloorApi extends FloorApi {
         startedAt: inMin(-35),
         scheduledEndAt: inMin(25),
       }),
-      ...[1, 2].map((n) =>
-        play(`p-live-void-${n}`, {
-          kind: 'group',
-          billId: 'b-live-void',
-          billStatus: 'active',
-          customerId: 'c-aditya',
-          resourceId: 's-void',
-          gameId: 'g-tekken',
-          startedAt: inMin(-52),
-          scheduledEndAt: inMin(8),
-        }),
-      ),
+      play('p-live-void', {
+        billId: 'b-live-void',
+        billStatus: 'active',
+        customerId: 'c-aditya',
+        resourceId: 's-void',
+        gameId: 'g-tekken',
+        controllers: 2,
+        startedAt: inMin(-52),
+        scheduledEndAt: inMin(8),
+      }),
       // History.
       play('p-1', {
         billId: 'b-1',
@@ -212,18 +209,17 @@ export class SampleFloorApi extends FloorApi {
       }),
     ];
     this.visitList = [
-      { id: 'b-live-hex', kind: 'single', customerId: 'c-kiran', status: 'active' },
-      { id: 'b-live-void', kind: 'group', customerId: 'c-aditya', status: 'active' },
-      { id: 'b-1', kind: 'single', customerId: 'c-kiran', status: 'completed', billed: 24000 },
-      { id: 'b-2', kind: 'single', customerId: 'c-meera', status: 'completed', billed: 15000 },
-      { id: 'b-3', kind: 'single', customerId: 'c-kiran', status: 'completed', billed: 18000 },
-      { id: 'b-4', kind: 'single', customerId: 'c-rahul', status: 'completed', billed: 12000 },
-      { id: 'b-5', kind: 'single', customerId: 'c-kiran', status: 'voided', billed: 12000 },
+      { id: 'b-live-hex', customerId: 'c-kiran', status: 'active' },
+      { id: 'b-live-void', customerId: 'c-aditya', status: 'active' },
+      { id: 'b-1', customerId: 'c-kiran', status: 'completed', billed: 24000 },
+      { id: 'b-2', customerId: 'c-meera', status: 'completed', billed: 15000 },
+      { id: 'b-3', customerId: 'c-kiran', status: 'completed', billed: 18000 },
+      { id: 'b-4', customerId: 'c-rahul', status: 'completed', billed: 12000 },
+      { id: 'b-5', customerId: 'c-kiran', status: 'voided', billed: 12000 },
     ].map((v): Visit => {
       const plays = this.playList.filter((p) => p.billId === v.id);
       return {
         id: v.id,
-        kind: v.kind as Visit['kind'],
         customerId: v.customerId,
         status: v.status as Visit['status'],
         startedAt: plays[0].startedAt,
@@ -238,7 +234,6 @@ export class SampleFloorApi extends FloorApi {
       { billId: 'b-4', resourceId: 's-void', at: at(1, '18:00'), minutes: 60, paise: 12000 },
       { billId: 'b-6', resourceId: 's-vr', at: at(4, '17:00'), minutes: 30, paise: 30000 },
     ].map((c): Charge => ({
-      kind: 'single',
       billId: c.billId,
       resourceId: c.resourceId,
       activityCode: c.resourceId === 's-vr' ? 'VR' : 'PS5',
@@ -266,19 +261,17 @@ export class SampleFloorApi extends FloorApi {
     return this.compatList.map((c) => ({ ...c }));
   }
 
-
   async plays(_arenaId: string, since: Date): Promise<Play[]> {
     this.fail();
     this.reads.push('plays');
     return this.playList.filter((p) => !p.endedAt || Date.parse(p.startedAt) >= since.getTime());
   }
 
-
-
   /** Plays of bills not voided, started since `since` or still open (the server's _plays). */
   private recent(since: Date): Play[] {
     return this.playList.filter(
-      (p) => p.billStatus !== 'voided' && (!p.endedAt || Date.parse(p.startedAt) >= since.getTime()),
+      (p) =>
+        p.billStatus !== 'voided' && (!p.endedAt || Date.parse(p.startedAt) >= since.getTime()),
     );
   }
 
@@ -393,7 +386,6 @@ export class SampleFloorApi extends FloorApi {
     }
     const bills = [...latest.values()].slice(0, limit).map((p) => ({
       billId: p.billId,
-      kind: p.kind,
       startedAt: p.startedAt,
       status: p.billStatus,
       billedPaise: this.visitList.find((v) => v.id === p.billId)?.billedPaise ?? null,
@@ -443,7 +435,11 @@ export class SampleFloorApi extends FloorApi {
             v.status !== 'voided' &&
             (v.status === 'active' || Date.parse(v.startedAt) >= q.since.getTime()),
         );
-        const newest = visits.map((v) => v.startedAt).sort().at(-1) ?? null;
+        const newest =
+          visits
+            .map((v) => v.startedAt)
+            .sort()
+            .at(-1) ?? null;
         return {
           id: c.id,
           name: c.name,

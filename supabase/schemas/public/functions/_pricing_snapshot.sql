@@ -32,7 +32,7 @@ create or replace function public._pricing_snapshot (
         'vr_unit_rounding', vr_unit_rounding, 'money_rounding_paise', money_rounding_paise,
         'money_rounding_dir', money_rounding_dir, 'payment_timing', payment_timing,
         'allow_extend_past_close', allow_extend_past_close,
-        'cleaning_gap_minutes', cleaning_gap_minutes, 'group_billing_mode', group_billing_mode)
+        'cleaning_gap_minutes', cleaning_gap_minutes)
         from billing_policies where arena_id = p_arena and active order by created_at limit 1),
         _pr_policy('{}'::jsonb)),
     -- BusinessHours.current() when the owner never saved hours.

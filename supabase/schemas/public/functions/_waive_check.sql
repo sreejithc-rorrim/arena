@@ -4,7 +4,7 @@
 -- amount; anyone else (with discount) at most settings.discount_options.manual_max_percent of
 -- the bill, the same cap as a manual discount (default 0: walk-outs then need an owner).
 -- Exact integer comparison (written_off × 100 > billed × cap), mirrored by the floor app.
--- Raises waive_over_limit (hint: the cap in percent). Used by op_session_end and op_group_end.
+-- Raises waive_over_limit (hint: the cap in percent). Used by op_session_end.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._waive_check (
   p_arena  uuid,

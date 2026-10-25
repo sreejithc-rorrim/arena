@@ -14,7 +14,6 @@ import {
   Bill,
   BillDetail,
   BillDiscount,
-  BillKind,
   BillPayment,
   PayMethod,
   PaymentStatus,
@@ -23,7 +22,6 @@ import {
 
 interface Spec {
   readonly id: string;
-  readonly kind?: BillKind;
   /** IST day (0 = today) and hh:mm the bill closed. */
   readonly day: number;
   readonly close: string;
@@ -57,7 +55,6 @@ const SPECS: readonly Spec[] = [
   },
   {
     id: '71b0e4aa-0000-4000-8000-000000000002',
-    kind: 'group',
     day: 0,
     close: '17:15',
     minutes: 90,
@@ -169,7 +166,6 @@ function build(spec: Spec, now: Date, n: number): BillDetail {
   const [h, m] = spec.close.split(':').map(Number);
   const at = new Date(istDayStart(now, spec.day).getTime() + (h * 60 + m) * 60_000);
   const startedAt = new Date(at.getTime() - spec.minutes * 60_000);
-  const kind = spec.kind ?? 'single';
   const payments: BillPayment[] = spec.payments.map(([method, rupees], i) => ({
     id: `${spec.id}-p${i}`,
     at: at.toISOString(),
@@ -183,9 +179,8 @@ function build(spec: Spec, now: Date, n: number): BillDetail {
   }));
   const players = spec.players ?? 1;
   const bill: Bill = {
-    kind,
     id: spec.id,
-    ref: billRef(kind, spec.id),
+    ref: billRef(spec.id),
     at: at.toISOString(),
     startedAt: startedAt.toISOString(),
     endedAt: at.toISOString(),
@@ -215,7 +210,6 @@ function build(spec: Spec, now: Date, n: number): BillDetail {
     ...bill,
     lines: [
       {
-        player: kind === 'group' ? 1 : null,
         station: spec.station,
         activity: bill.activities[0],
         controllers: players,
@@ -278,7 +272,9 @@ export class SampleSalesApi extends SalesApi {
     this.fail();
     this.overviewReads++;
     const within = (from: Date, to: Date) =>
-      this.bills.filter((b) => Date.parse(b.at) >= from.getTime() && Date.parse(b.at) < to.getTime());
+      this.bills.filter(
+        (b) => Date.parse(b.at) >= from.getTime() && Date.parse(b.at) < to.getTime(),
+      );
     const cur = within(q.from, q.to);
     const live = cur.filter((b) => !b.voided);
     const minutes = (b: Bill) =>
@@ -303,7 +299,8 @@ export class SampleSalesApi extends SalesApi {
       return new Date(start - 330 * 60_000).toISOString();
     };
     const buckets = new Map<string, number>();
-    for (const b of live) buckets.set(bucketStart(b.at), (buckets.get(bucketStart(b.at)) ?? 0) + b.paidPaise);
+    for (const b of live)
+      buckets.set(bucketStart(b.at), (buckets.get(bucketStart(b.at)) ?? 0) + b.paidPaise);
     const methods: Partial<Record<PayMethod, { paise: number; bills: number }>> = {};
     for (const b of live) {
       for (const [m, v] of Object.entries(b.methods) as [PayMethod, number][]) {
@@ -447,7 +444,9 @@ export class SampleSalesApi extends SalesApi {
     if (b.paymentStatus === 'waived') throw this.error('waived');
     const diff = change.billedPaise - b.paidPaise;
     if (diff === 0 && change.billedPaise === b.billedPaise) throw this.error('same_total');
-    const rows = diff ? [this.entry(change.method, diff, diff < 0, false, reason, 'Bill edited')] : [];
+    const rows = diff
+      ? [this.entry(change.method, diff, diff < 0, false, reason, 'Bill edited')]
+      : [];
     const updated = this.addPayments({ ...b, billedPaise: change.billedPaise }, rows);
     this.put({
       ...updated,

@@ -5,7 +5,6 @@
 /// end / void cleanup. Timers, history and billing must be untouched.
 library;
 
-import 'package:arena_ops/app/controllers/group_session_actions.dart';
 import 'package:arena_ops/app/controllers/session_actions.dart';
 import 'package:arena_ops/core/clock/clock.dart';
 import 'package:arena_ops/data/local/database.dart';
@@ -13,7 +12,6 @@ import 'package:arena_ops/data/local/local_booking_repository.dart';
 import 'package:arena_ops/data/local/local_catalog_repository.dart';
 import 'package:arena_ops/data/local/local_controller_allocation_repository.dart';
 import 'package:arena_ops/data/local/local_customer_repository.dart';
-import 'package:arena_ops/data/local/local_group_session_repository.dart';
 import 'package:arena_ops/data/local/local_session_repository.dart';
 import 'package:arena_ops/data/local/seed_data.dart';
 import 'package:arena_ops/domain/auth/app_user.dart';
@@ -31,11 +29,9 @@ import '../support/pricing_fixtures.dart';
 void main() {
   late AppDatabase db;
   late LocalSessionRepository sessionsRepo;
-  late LocalGroupSessionRepository groupsRepo;
   late LocalCatalogRepository catalog;
   late LocalControllerAllocationRepository alloc;
   late SessionActions single;
-  late GroupSessionActions groupActions;
   late Customer who;
 
   final start = ist(2026, 10, 2, 18, 0); // Friday 18:00 IST.
@@ -54,21 +50,10 @@ void main() {
     db = AppDatabase(NativeDatabase.memory());
     await LocalSeed.apply(db);
     sessionsRepo = LocalSessionRepository(db, clock);
-    groupsRepo = LocalGroupSessionRepository(db, clock);
     catalog = LocalCatalogRepository(db);
     alloc = LocalControllerAllocationRepository(db, clock);
     final bookings = LocalBookingRepository(db, clock);
     single = SessionActions(
-      sessions: sessionsRepo,
-      groups: groupsRepo,
-      catalog: catalog,
-      bookings: bookings,
-      clock: clock,
-      guard: staff,
-      pads: alloc,
-    );
-    groupActions = GroupSessionActions(
-      groups: groupsRepo,
       sessions: sessionsRepo,
       catalog: catalog,
       bookings: bookings,
@@ -344,180 +329,6 @@ void main() {
       final a = await activeOn('hex');
       final r = await sessionsRepo.voidSession(a.session.id, 'wrong customer');
       expect(r.isOk, isTrue);
-      expect(await held(), isEmpty);
-    });
-  });
-
-  group('group session', () {
-    GroupPlayerDraft player(
-      int n,
-      String res,
-      String name, {
-      List<String> pads = const [],
-      String game = 'g_wwe',
-    }) => GroupPlayerDraft(
-      playerNumber: n,
-      resourceId: res,
-      resourceName: name,
-      activityCode: 'PS5',
-      gameId: game,
-      controllerCount: pads.isEmpty ? 1 : pads.length,
-      controllerIds: pads,
-    );
-
-    GroupSessionDraft gdraft(List<GroupPlayerDraft> players) =>
-        GroupSessionDraft(
-          primaryCustomerId: who.id,
-          playerCount: players.length,
-          purchasedControllerCount: players.length,
-          players: players,
-        );
-
-    test('start allocates each player their own pads', () async {
-      final r = await groupActions.create(
-        gdraft([
-          player(1, 'hex', 'HEX', pads: ['ctl_hex_1']),
-          player(2, 'hex', 'HEX', pads: ['ctl_hex_2']),
-          player(3, 'void', 'VOID', pads: ['ctl_void_1']),
-        ]),
-      );
-      expect(r.isOk, isTrue, reason: r.failureOrNull?.display);
-      final open = await alloc.openPadAllocations();
-      final byPlayer = {for (final a in open) a.controllerId: a.playerNumber};
-      expect(byPlayer, {'ctl_hex_1': 1, 'ctl_hex_2': 2, 'ctl_void_1': 3});
-    });
-
-    test(
-      'the same pad picked for two players is refused, naming both',
-      () async {
-        final r = await groupActions.create(
-          gdraft([
-            player(1, 'hex', 'HEX', pads: ['ctl_hex_1']),
-            player(2, 'hex', 'HEX', pads: ['ctl_hex_1']),
-          ]),
-        );
-        expect(r.failureOrNull?.code, 'controller_duplicate');
-        expect(
-          r.failureOrNull?.message,
-          'Player 2: HEX-1 is already picked for Player 1.',
-        );
-        expect(await groupsRepo.activeGroups(), isEmpty);
-      },
-    );
-
-    test(
-      'add a player with a pad, then switch them to another station',
-      () async {
-        final created = await groupActions.create(
-          gdraft([
-            player(1, 'hex', 'HEX', pads: ['ctl_hex_1']),
-          ]),
-        );
-        final g = created.valueOrNull!;
-
-        final add = await groupActions.addPlayer(
-          groupId: g.id,
-          playerNumber: 2,
-          resourceId: 'hex',
-          resourceName: 'HEX',
-          activityCode: 'PS5',
-          gameId: 'g_wwe',
-          controllerCount: 1,
-          controllerIds: ['ctl_hex_2'],
-        );
-        expect(add.isOk, isTrue, reason: add.failureOrNull?.display);
-
-        // HEX-1 is Player 1's — Player 2 cannot take it.
-        final grab = await groupActions.addPlayer(
-          groupId: g.id,
-          playerNumber: 3,
-          resourceId: 'hex',
-          resourceName: 'HEX',
-          activityCode: 'PS5',
-          gameId: 'g_wwe',
-          controllerCount: 1,
-          controllerIds: ['ctl_hex_1'],
-        );
-        // A teammate's pad is named as theirs.
-        expect(grab.failureOrNull?.code, 'controller_duplicate');
-        expect(
-          grab.failureOrNull?.message,
-          'HEX-1 is already picked for Player 1.',
-        );
-
-        clock.advance(const Duration(minutes: 15));
-        final active = (await groupsRepo.activeGroups()).single;
-        final p2 = active.currentForPlayer(2)!;
-        final sw = await groupActions.switchSystem(
-          groupId: g.id,
-          playerNumber: 2,
-          resourceId: 'ghost',
-          resourceName: 'GHOST',
-          activityCode: 'PS5',
-          gameId: 'g_wwe',
-          controllerCount: 1,
-          controllerIds: ['ctl_ghost_1'],
-          current: p2,
-        );
-        expect(sw.isOk, isTrue, reason: sw.failureOrNull?.display);
-        expect(await held(), {'ctl_hex_1', 'ctl_ghost_1'});
-        final after = (await groupsRepo.activeGroups()).single;
-        expect(after.group.startedAt, active.group.startedAt);
-        expect(after.group.scheduledEndAt, active.group.scheduledEndAt);
-      },
-    );
-
-    test('group game change carries the player’s pads', () async {
-      final g = (await groupActions.create(
-        gdraft([
-          player(1, 'hex', 'HEX', pads: ['ctl_hex_1']),
-        ]),
-      )).valueOrNull!;
-      final p1 = (await groupsRepo.activeGroups()).single.currentForPlayer(1)!;
-      final r = await groupActions.changeGame(
-        groupId: g.id,
-        current: p1,
-        gameId: 'g_nba',
-      );
-      expect(r.isOk, isTrue, reason: r.failureOrNull?.display);
-      final now = (await groupsRepo.activeGroups()).single.currentForPlayer(1)!;
-      expect(await groupActions.padsHeldBy(now), ['ctl_hex_1']);
-    });
-
-    test('a RIFT locked to VR is not offered to a PS5 group', () async {
-      await alloc.setResourceMode('rift', 'VR');
-      final g = (await groupActions.create(gdraft([player(1, 'hex', 'HEX')])))
-          .valueOrNull!;
-      final candidates = await groupActions.candidateResources(
-        group: g,
-        playerNumber: 2,
-        activityCode: 'PS5',
-        gameId: 'g_wwe',
-      );
-      expect(candidates.map((r) => r.id), isNot(contains('rift')));
-    });
-
-    test('ending the group releases every pad', () async {
-      await groupActions.create(
-        gdraft([
-          player(1, 'hex', 'HEX', pads: ['ctl_hex_1']),
-          player(2, 'void', 'VOID', pads: ['ctl_void_1']),
-        ]),
-      );
-      final g = (await groupsRepo.activeGroups()).single;
-      clock.advance(const Duration(minutes: 60));
-      expect((await groupActions.end(g)).isOk, isTrue);
-      expect(await held(), isEmpty);
-    });
-
-    test('voiding the group releases every pad', () async {
-      await groupActions.create(
-        gdraft([
-          player(1, 'hex', 'HEX', pads: ['ctl_hex_1']),
-        ]),
-      );
-      final g = (await groupsRepo.activeGroups()).single;
-      expect((await groupsRepo.voidGroup(g.group.id, 'test')).isOk, isTrue);
       expect(await held(), isEmpty);
     });
   });

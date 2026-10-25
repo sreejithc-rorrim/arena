@@ -170,50 +170,6 @@ enum SessionStatus {
       SessionStatus.values.firstWhere((s) => s.code == c);
 }
 
-/// Group-session lifecycle (group feature). Mirrors [SessionStatus]; overtime is
-/// derived, never stored. The parent owns the one authoritative time window that
-/// every player assignment shares.
-enum GroupSessionStatus {
-  active,
-  completed,
-  voided;
-
-  String get code => name;
-  static GroupSessionStatus fromCode(String c) =>
-      GroupSessionStatus.values.firstWhere((s) => s.code == c);
-}
-
-/// How a group that uses several systems at once is billed (OWNER CONFIRMATION
-/// #24). Configurable; the default is [perSystem].
-enum GroupBillingMode {
-  /// Each system is billed for the time the group uses it, at the rate for the
-  /// number of controllers on THAT system (co-located players on one system are
-  /// combined). Three separate systems therefore cost more than one shared one;
-  /// a three-controller price never silently covers three systems.
-  perSystem,
-
-  /// The group pays once for the purchased controller count at the single-system
-  /// multi-controller rate, regardless of how many systems the controllers are
-  /// spread across. Any non-PS5 usage is still billed per system.
-  sharedControllerPool;
-
-  String get code => switch (this) {
-        GroupBillingMode.perSystem => 'per_system',
-        GroupBillingMode.sharedControllerPool => 'shared_controller_pool',
-      };
-
-  String get label => switch (this) {
-        GroupBillingMode.perSystem => 'Per system',
-        GroupBillingMode.sharedControllerPool => 'Shared controller pool',
-      };
-
-  static GroupBillingMode fromCode(String c) => switch (c) {
-        'per_system' => GroupBillingMode.perSystem,
-        'shared_controller_pool' => GroupBillingMode.sharedControllerPool,
-        _ => throw ArgumentError('Unknown group_billing_mode: $c'),
-      };
-}
-
 /// Payment rollup (spec §9).
 enum PaymentStatus {
   unpaid,
@@ -234,6 +190,13 @@ enum PaymentMethod {
   other;
 
   String get code => name;
+
+  String get label => switch (this) {
+        PaymentMethod.upi => 'UPI',
+        PaymentMethod.cash => 'Cash',
+        PaymentMethod.card => 'Card',
+        PaymentMethod.other => 'Other',
+      };
   static PaymentMethod fromCode(String c) =>
       PaymentMethod.values.firstWhere((m) => m.code == c);
 }

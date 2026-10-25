@@ -92,8 +92,8 @@ select is(
       and has_function_privilege('authenticated', p.oid, 'execute')),
   array['accept_invite', 'accessory_kind_catalog', 'app_is_owner', 'arena_activity', 'arena_discount_usage', 'arena_game_fans',
         'arena_game_stats', 'arena_invites', 'arena_members', 'arena_overview', 'arena_pricing', 'arena_sale',
-        'arena_sales', 'arena_staff', 'arena_station_stats', 'attendance_days', 'create_my_arena', 'invite_member',
-        'leave_balances', 'my_arenas', 'my_bills', 'revoke_invite', 'session_quote', 'station_type_catalog',
+        'arena_sales', 'arena_staff', 'arena_station_stats', 'create_my_arena', 'invite_member',
+        'my_arenas', 'my_bills', 'revoke_invite', 'session_quote', 'station_type_catalog',
         'sync_fetch_entity', 'sync_pull', 'sync_push'],
   'the client API is exactly these functions');
 -- Security Advisor lints 0028/0029: no SECURITY DEFINER function in an exposed

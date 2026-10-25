@@ -17,17 +17,16 @@ class AppTelemetry {
     Map<String, dynamic>? data,
   }) {}
 
-  /// Records the start of a session timer (single or group).
+  /// Records the start of a session timer.
   static void timerStarted({
     required String sessionId,
     required String resourceId,
     required String activityCode,
     int? durationMinutes,
     int? controllerCount,
-    bool isGroup = false,
   }) {
     addBreadcrumb(
-      category: isGroup ? 'group_timer' : 'timer',
+      category: 'timer',
       message: 'timer_started',
       data: {
         'sessionId': sessionId,
@@ -35,7 +34,6 @@ class AppTelemetry {
         'activityCode': activityCode,
         'durationMinutes': ?durationMinutes,
         'controllerCount': ?controllerCount,
-        'isGroup': isGroup,
       },
     );
   }
@@ -46,10 +44,9 @@ class AppTelemetry {
     required String resourceId,
     required int billedAmountPaise,
     required Duration playedDuration,
-    bool isGroup = false,
   }) {
     addBreadcrumb(
-      category: isGroup ? 'group_timer' : 'timer',
+      category: 'timer',
       message: 'timer_stopped',
       data: {
         'sessionId': sessionId,
@@ -57,7 +54,6 @@ class AppTelemetry {
         'billedAmountPaise': billedAmountPaise,
         'playedSeconds': playedDuration.inSeconds,
         'playedMinutes': playedDuration.inMinutes,
-        'isGroup': isGroup,
       },
     );
   }
@@ -70,7 +66,6 @@ class AppTelemetry {
     required String toResourceId,
     String? gameId,
     int? controllerCount,
-    bool isGroup = false,
   }) {
     addBreadcrumb(
       category: 'session',
@@ -82,7 +77,6 @@ class AppTelemetry {
         'toResourceId': toResourceId,
         'gameId': ?gameId,
         'controllerCount': ?controllerCount,
-        'isGroup': isGroup,
       },
     );
   }

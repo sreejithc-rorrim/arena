@@ -8,33 +8,18 @@ import 'package:arena_ops/features/auth/presentation/login_screen.dart';
 import 'package:arena_ops/features/bills/presentation/my_bills_screen.dart';
 import 'package:arena_ops/features/bookings/presentation/bookings_screen.dart';
 import 'package:arena_ops/features/floor/presentation/floor_screen.dart';
-import 'package:arena_ops/features/money/presentation/money_screen.dart';
 import 'package:arena_ops/features/profile/presentation/terms_screen.dart';
 import 'package:arena_ops/features/more/presentation/more_screen.dart';
-import 'package:arena_ops/features/reports/presentation/reports_screen.dart';
-import 'package:arena_ops/features/today/presentation/today_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:arena_ops/features/attendance/presentation/attendance_history_screen.dart';
-import 'package:arena_ops/features/attendance/presentation/attendance_screen.dart';
 import 'package:arena_ops/features/bookings/presentation/booking_screen.dart';
 import 'package:arena_ops/features/controllers/presentation/controller_board_screen.dart';
 import 'package:arena_ops/features/customers/presentation/customer_profile_screen.dart';
 import 'package:arena_ops/features/customers/presentation/customers_screen.dart';
 import 'package:arena_ops/features/floor/presentation/station_detail_screen.dart';
-import 'package:arena_ops/features/games/presentation/games_screen.dart';
-import 'package:arena_ops/features/group_sessions/presentation/group_detail_screen.dart';
-import 'package:arena_ops/features/group_sessions/presentation/group_session_screen.dart';
-import 'package:arena_ops/features/leave/presentation/leave_screen.dart';
 import 'package:arena_ops/features/more/presentation/help_screen.dart';
-import 'package:arena_ops/features/more/presentation/holidays_screen.dart';
-import 'package:arena_ops/features/more/presentation/hours_screen.dart';
-import 'package:arena_ops/features/more/presentation/pricing_screen.dart';
-import 'package:arena_ops/features/more/presentation/settings_screen.dart';
-import 'package:arena_ops/features/more/presentation/staff_screen.dart';
-import 'package:arena_ops/features/more/presentation/stations_screen.dart';
 import 'package:arena_ops/features/new_session/presentation/new_session_screen.dart';
 import 'package:arena_ops/features/notifications/presentation/notification_settings_screen.dart';
 import 'package:arena_ops/features/notifications/presentation/notifications_screen.dart';
@@ -45,11 +30,10 @@ import 'package:arena_ops/features/sync/presentation/sync_screen.dart';
 /// above the tab shell (hiding the bottom navigation bar).
 final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'rootNav');
 
-/// Seven bottom tabs: Today · Floor · Bookings · Money · Reports · Bills · More.
-/// Which ones show depends on the signed-in user's role (owners see Money /
-/// Reports / Today; staff see Floor + Bookings + More, plus Bills with
-/// bill_edit when signed in online). Customers ("Members") and the Games
-/// library live under More.
+/// Four bottom tabs: Floor · Bookings · Bills · More. Bills shows with
+/// bill_edit or bill_record when signed in online. Customers ("Members") live
+/// under More. Owner work (takings, reports, pricing, stations, games, staff)
+/// is on the admin web, not here.
 final goRouterProvider = Provider<GoRouter>((ref) {
   // Re-run redirect whenever the signed-in user changes (sign in / out).
   final refresh = ValueNotifier<int>(0);
@@ -78,7 +62,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       }
       if (atLogin || atTerms) return defaultPathFor(user);
 
-      // Block tabs the user can't access (e.g. staff → /money).
+      // Block tabs the user can't access (e.g. Bills without bill_edit).
       for (final tab in AppTab.all) {
         if (tab.path == loc && !tab.visibleFor(user, cloud: cloud)) {
           return defaultPathFor(user);
@@ -86,9 +70,6 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       }
 
       // Block secondary routes the user can't access.
-      if (loc.startsWith('/settings') && !user.can(Permission.settings)) {
-        return defaultPathFor(user);
-      }
       if (loc.startsWith('/customers') && !user.can(Permission.members)) {
         return defaultPathFor(user);
       }
@@ -112,12 +93,6 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         branches: [
           StatefulShellBranch(routes: [
             GoRoute(
-              path: TodayScreen.path,
-              builder: (context, state) => const TodayScreen(),
-            ),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(
               path: FloorScreen.path,
               builder: (context, state) => const FloorScreen(),
             ),
@@ -126,18 +101,6 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             GoRoute(
               path: BookingsScreen.path,
               builder: (context, state) => const BookingsScreen(),
-            ),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path: MoneyScreen.path,
-              builder: (context, state) => const MoneyScreen(),
-            ),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path: ReportsScreen.path,
-              builder: (context, state) => const ReportsScreen(),
             ),
           ]),
           StatefulShellBranch(routes: [
@@ -156,21 +119,6 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       // Full-screen secondary routes (covering the AppShell and bottom navigation):
       GoRoute(
-        path: AttendanceScreen.path,
-        parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const AttendanceScreen(),
-      ),
-      GoRoute(
-        path: AttendanceHistoryScreen.path,
-        parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const AttendanceHistoryScreen(),
-      ),
-      GoRoute(
-        path: LeaveScreen.path,
-        parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const LeaveScreen(),
-      ),
-      GoRoute(
         path: SessionLogScreen.path,
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) => const SessionLogScreen(),
@@ -186,41 +134,6 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => CustomerProfileScreen(
           customerId: state.pathParameters['id']!,
         ),
-      ),
-      GoRoute(
-        path: '/settings',
-        parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const SettingsScreen(),
-      ),
-      GoRoute(
-        path: PricingScreen.path,
-        parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const PricingScreen(),
-      ),
-      GoRoute(
-        path: HoursScreen.path,
-        parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const HoursScreen(),
-      ),
-      GoRoute(
-        path: HolidaysScreen.path,
-        parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const HolidaysScreen(),
-      ),
-      GoRoute(
-        path: StationsScreen.path,
-        parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const StationsScreen(),
-      ),
-      GoRoute(
-        path: StaffScreen.path,
-        parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const StaffScreen(),
-      ),
-      GoRoute(
-        path: GamesScreen.path,
-        parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const GamesScreen(),
       ),
       GoRoute(
         path: HelpScreen.path,
@@ -258,31 +171,18 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const NewSessionScreen(),
       ),
       GoRoute(
-        path: '/groups/new',
-        parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const GroupSessionScreen(),
-      ),
-      GoRoute(
         path: '/sessions/:id',
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) => StationDetailScreen(
           sessionId: state.pathParameters['id']!,
         ),
       ),
-      GoRoute(
-        path: '/groups/:id',
-        parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => GroupDetailScreen(
-          groupId: state.pathParameters['id']!,
-        ),
-      ),
     ],
   );
 });
 
-/// Where a user lands after signing in: owners on Today, staff on the Floor.
-String defaultPathFor(AppUser user) =>
-    user.isOwner ? TodayScreen.path : FloorScreen.path;
+/// Where a user lands after signing in: the Floor, owners included.
+String defaultPathFor(AppUser user) => FloorScreen.path;
 
 /// Tab metadata, kept next to the router so the shell and routes agree. Each
 /// tab's branch index matches its position in the shell above.
@@ -293,10 +193,8 @@ class AppTab {
     this.selectedIcon,
     this.path,
     this.branchIndex, {
-    this.requiresOwner = false,
-    this.requires,
     this.requiresAny,
-    this.staffOnline = false,
+    this.online = false,
   });
 
   final String label;
@@ -305,42 +203,27 @@ class AppTab {
   final String path;
   final int branchIndex;
 
-  /// Owner-only (Today's glance includes takings).
-  final bool requiresOwner;
-
-  /// A single permission that gates the tab, if any.
-  final Permission? requires;
-
   /// Any one of these permissions opens the tab, if set.
   final List<Permission>? requiresAny;
 
-  /// Online-only staff tab (Bills): hidden in local mode, and for owner-level
-  /// users, whose bar is full (they reach it from More).
-  final bool staffOnline;
+  /// Online-only tab (Bills): hidden in local mode.
+  final bool online;
 
   bool visibleFor(AppUser user, {bool cloud = true}) {
-    if (requiresOwner && !user.isOwner) return false;
-    if (requires != null && !user.can(requires!)) return false;
     if (requiresAny != null && !requiresAny!.any(user.can)) return false;
-    if (staffOnline && (!cloud || user.isOwner)) return false;
+    if (online && !cloud) return false;
     return true;
   }
 
   static const List<AppTab> all = [
-    AppTab('Today', Icons.monitor_heart_outlined, Icons.monitor_heart,
-        TodayScreen.path, 0, requiresOwner: true),
     AppTab('Floor', Icons.grid_view_outlined, Icons.grid_view_rounded,
-        FloorScreen.path, 1),
+        FloorScreen.path, 0),
     AppTab('Bookings', Icons.event_available_outlined, Icons.event_available,
-        BookingsScreen.path, 2),
-    AppTab('Money', Icons.payments_outlined, Icons.payments, MoneyScreen.path, 3,
-        requires: Permission.money),
-    AppTab('Reports', Icons.leaderboard_outlined, Icons.leaderboard,
-        ReportsScreen.path, 4, requires: Permission.reports),
+        BookingsScreen.path, 1),
     AppTab('Bills', Icons.receipt_long_outlined, Icons.receipt_long,
-        MyBillsScreen.path, 6,
+        MyBillsScreen.path, 3,
         requiresAny: [Permission.billEdit, Permission.billRecord],
-        staffOnline: true),
-    AppTab('More', Icons.more_horiz, Icons.more_horiz, MoreScreen.path, 5),
+        online: true),
+    AppTab('More', Icons.more_horiz, Icons.more_horiz, MoreScreen.path, 2),
   ];
 }

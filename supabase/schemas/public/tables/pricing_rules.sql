@@ -1,6 +1,6 @@
 -- pricing_rules — day/time price adjustments on top of the rate card ("Weekend evening +20%")
 --
--- Owner-defined per arena. A rule matches a session by the session's (or group's)
+-- Owner-defined per arena. A rule matches a session by the session's
 -- START instant in Asia/Kolkata: weekday in days, minute of day in
 -- [start_min, end_min), holiday_mode against the holidays list, the date inside
 -- [valid_from, valid_until], and the activity in activity_codes (empty = every

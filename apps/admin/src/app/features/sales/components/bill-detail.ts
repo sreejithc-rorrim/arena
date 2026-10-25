@@ -505,7 +505,7 @@ export class BillDetail {
   });
 
   protected lineTitle(line: BillLine): string {
-    return line.player != null ? `Player ${line.player} · ${line.station}` : line.station;
+    return line.station;
   }
 
   protected lineSub(line: BillLine): string {

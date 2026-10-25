@@ -24,7 +24,6 @@ class BillingPolicy {
     this.paymentTiming = PaymentTiming.either, // #17
     this.allowExtendPastClose = false, // #18
     this.cleaningGapMinutes = 0, // #23
-    this.groupBillingMode = GroupBillingMode.perSystem, // #24
   });
 
   /// The documented MVP defaults.
@@ -47,9 +46,6 @@ class BillingPolicy {
   final bool allowExtendPastClose;
   final int cleaningGapMinutes;
 
-  /// How a group spanning several systems is billed (group feature §9).
-  final GroupBillingMode groupBillingMode;
-
   BillingPolicy copyWith({
     BillingUnit? billingUnit,
     Rounding? blockRounding,
@@ -64,7 +60,6 @@ class BillingPolicy {
     PaymentTiming? paymentTiming,
     bool? allowExtendPastClose,
     int? cleaningGapMinutes,
-    GroupBillingMode? groupBillingMode,
   }) =>
       BillingPolicy(
         billingUnit: billingUnit ?? this.billingUnit,
@@ -80,7 +75,6 @@ class BillingPolicy {
         paymentTiming: paymentTiming ?? this.paymentTiming,
         allowExtendPastClose: allowExtendPastClose ?? this.allowExtendPastClose,
         cleaningGapMinutes: cleaningGapMinutes ?? this.cleaningGapMinutes,
-        groupBillingMode: groupBillingMode ?? this.groupBillingMode,
       );
 
   Map<String, dynamic> toJson() => {
@@ -97,7 +91,6 @@ class BillingPolicy {
         'payment_timing': paymentTiming.code,
         'allow_extend_past_close': allowExtendPastClose,
         'cleaning_gap_minutes': cleaningGapMinutes,
-        'group_billing_mode': groupBillingMode.code,
       };
 
   factory BillingPolicy.fromJson(Map<String, dynamic> j) => BillingPolicy(
@@ -114,10 +107,6 @@ class BillingPolicy {
         paymentTiming: PaymentTiming.fromCode(j['payment_timing'] as String),
         allowExtendPastClose: j['allow_extend_past_close'] as bool,
         cleaningGapMinutes: j['cleaning_gap_minutes'] as int,
-        // Tolerate snapshots captured before the group knob existed.
-        groupBillingMode: j['group_billing_mode'] == null
-            ? GroupBillingMode.perSystem
-            : GroupBillingMode.fromCode(j['group_billing_mode'] as String),
       );
 
   @override
@@ -135,8 +124,7 @@ class BillingPolicy {
       other.moneyRoundingDir == moneyRoundingDir &&
       other.paymentTiming == paymentTiming &&
       other.allowExtendPastClose == allowExtendPastClose &&
-      other.cleaningGapMinutes == cleaningGapMinutes &&
-      other.groupBillingMode == groupBillingMode;
+      other.cleaningGapMinutes == cleaningGapMinutes;
 
   @override
   int get hashCode => Object.hashAll([
@@ -153,6 +141,5 @@ class BillingPolicy {
         paymentTiming,
         allowExtendPastClose,
         cleaningGapMinutes,
-        groupBillingMode,
       ]);
 }

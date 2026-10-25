@@ -110,13 +110,11 @@ class _NewSessionScreenState extends ConsumerState<NewSessionScreen> {
     };
     final resources = ref.watch(resourcesProvider).value ?? const [];
     final openSegments = ref.watch(openSegmentsProvider).value ?? const [];
-    // A STATION is free when no session or group player is on it — whether
+    // A STATION is free when no session is on it — whether
     // its own controllers are there is a separate question (they can be
     // borrowed in).
     final occupied = {
       for (final s in openSegments) s.resourceId,
-      for (final a in ref.watch(openGroupAssignmentsProvider).value ?? const [])
-        a.resourceId,
     };
 
     Activity? activity;

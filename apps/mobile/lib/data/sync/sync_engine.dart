@@ -5,7 +5,7 @@
 ///     (a retried op replays its first answer), so a timeout or a crash between
 ///     sending and recording the answer can never apply an op twice.
 ///  2. ROLL BACK what the server refused: the device's copy of each affected
-///     entity (session, group, pad, customer, booking — or the whole catalog)
+///     entity (session, pad, customer, booking — or the whole catalog)
 ///     is replaced with the server's. The refused op itself is kept, with the
 ///     server's reason, until someone acknowledges it.
 ///  3. PULL everything committed since the cursor and apply it.
@@ -544,13 +544,6 @@ class SyncEngine {
 
     collect(payload['allocations']);
     collect(payload['moves']);
-    for (final a in [
-      ...?(payload['assignments'] as List?),
-      if (payload['assignment'] != null) payload['assignment'],
-    ]) {
-      collect((a as Map)['allocations']);
-      collect(a['moves']);
-    }
     if (op.kind == 'controller.move' || op.kind.startsWith('controller.')) {
       final id = payload['controller_id'] ?? payload['id'];
       if (id is String) pads.add(id);

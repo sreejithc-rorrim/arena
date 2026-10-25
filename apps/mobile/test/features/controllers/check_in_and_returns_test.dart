@@ -1,6 +1,5 @@
-/// Widget-level: booking check-in with physical pads (including a borrow), the
-/// group change-controllers sheet catching the game's local-player limit
-/// before Apply, and returning a borrowed pad from the end sheet.
+/// Widget-level: booking check-in with physical pads (including a borrow) and
+/// returning a borrowed pad from the end sheet.
 library;
 
 import 'package:arena_ops/app/controllers/booking_actions.dart';
@@ -10,17 +9,14 @@ import 'package:arena_ops/data/local/local_booking_repository.dart';
 import 'package:arena_ops/data/local/local_catalog_repository.dart';
 import 'package:arena_ops/data/local/local_controller_allocation_repository.dart';
 import 'package:arena_ops/data/local/local_customer_repository.dart';
-import 'package:arena_ops/data/local/local_group_session_repository.dart';
 import 'package:arena_ops/data/local/local_session_repository.dart';
 import 'package:arena_ops/domain/auth/app_user.dart';
 import 'package:arena_ops/domain/auth/permission.dart';
 import 'package:arena_ops/domain/auth/permission_guard.dart';
 import 'package:arena_ops/domain/repositories/commands.dart';
-import 'package:arena_ops/domain/repositories/group_commands.dart';
 import 'package:arena_ops/domain/value/enums.dart';
 import 'package:arena_ops/features/bookings/presentation/check_in_sheet.dart';
 import 'package:arena_ops/features/floor/presentation/sheets/end_session_sheet.dart';
-import 'package:arena_ops/features/group_sessions/presentation/sheets/group_assign_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -135,58 +131,69 @@ void main() {
     await disposeApp(tester);
   });
 
-  testWidgets('group change-controllers: a third Tekken controller on a '
-      'shared station is shown and Apply stays disabled', (tester) async {
+  testWidgets('check-in: an any-system booking skips a station in overtime '
+      'and staff can pick another free one (#20)', (tester) async {
     phone(tester);
+    final clock = FakeClock(ist(2026, 10, 2, 14, 0));
+    final walkIn = await LocalCustomerRepository(db).create(name: 'Walk-in');
+    // Booked 14:00–15:00 and never ended: HEX is in overtime at 19:02.
+    final overtime = await LocalSessionRepository(db, clock).start(
+      StartSessionCommand(
+        customerId: walkIn.id,
+        startedAt: clock.now(),
+        scheduledEndAt: clock.now().add(const Duration(hours: 1)),
+        snapshot: await LocalCatalogRepository(db).currentSnapshot(),
+        resourceId: 'hex',
+        resourceName: 'HEX',
+        activityCode: 'PS5',
+        controllerCount: 2,
+      ),
+    );
+    expect(overtime.isOk, isTrue, reason: overtime.failureOrNull?.display);
     final who = await LocalCustomerRepository(db).create(name: 'Rahul');
-    final groups = LocalGroupSessionRepository(db);
-    final created = await groups.create(CreateGroupCommand(
-      primaryCustomerId: who.id,
-      playerCount: 2,
-      purchasedControllerCount: 2,
-      startedAt: now,
-      scheduledEndAt: now.add(const Duration(hours: 1)),
-      snapshot: await LocalCatalogRepository(db).currentSnapshot(),
-      billingMode: GroupBillingMode.perSystem,
-      assignments: const [
-        GroupAssignmentDraft(
-            playerNumber: 1,
-            resourceId: 'hex',
-            resourceName: 'HEX',
-            activityCode: 'PS5',
-            gameId: 'g_tekken8',
-            controllerIds: ['ctl_hex_1']),
-        GroupAssignmentDraft(
-            playerNumber: 2,
-            resourceId: 'hex',
-            resourceName: 'HEX',
-            activityCode: 'PS5',
-            gameId: 'g_tekken8',
-            controllerIds: ['ctl_hex_2']),
-      ],
-    ));
-    expect(created.isOk, isTrue, reason: created.failureOrNull?.display);
-    final g = (await groups.activeGroups()).single;
+    final booking = (await BookingActions(
+      bookings: LocalBookingRepository(db, clock),
+      sessions: LocalSessionRepository(db, clock),
+      catalog: LocalCatalogRepository(db),
+      clock: clock,
+      guard: const PermissionGuard(AppUser(
+        id: 'u2',
+        name: 'Staff',
+        perms: {Permission.start},
+      )),
+    ).createBooking(BookingDraft(
+      customerId: who.id,
+      activityCode: 'PS5',
+      date: fridayDate,
+      startMinuteOfDay: 19 * 60,
+      durationMinutes: 60,
+      gameId: 'g_eafc',
+      controllerRequirement: 2,
+    )))
+        .valueOrNull!;
 
-    await tester.pumpWidget(opener((c) => showGroupChangeControllersSheet(c,
-        group: g, current: g.currentForPlayer(1)!)));
+    await tester.pumpWidget(opener((c) => showCheckInSheet(c, booking)));
     await tester.tap(find.text('open'));
     await settle(tester);
 
-    // HEX-2 is Player 2's; ask for 2 and borrow one from VOID.
-    await tester.tap(find.byKey(const ValueKey('ctl-count-2')));
-    await settle(tester);
-    await tester.tap(find.byKey(const ValueKey('pad-ctl_void_1')));
-    await settle(tester);
+    String station() =>
+        tester.widget<Text>(find.byKey(const ValueKey('check-in-station'))).data!;
+    expect(station(), 'VOID · free compatible system · booked for 2 controllers');
+    expect(find.byKey(const ValueKey('check-in-station-hex')), findsNothing);
+    expect(find.byKey(const ValueKey('check-in-station-void')), findsOneWidget);
 
+    await tester.tap(find.byKey(const ValueKey('check-in-station-rift')));
+    await settle(tester);
+    expect(station(), 'RIFT · free compatible system · booked for 2 controllers');
     expect(
-        tester.widget<Text>(find.byKey(const ValueKey('assign-problem'))).data,
-        contains('Tekken 8 supports 2 local players — 3 controllers on HEX.'));
-    expect(
-        tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Apply'))
-            .onPressed,
-        isNull);
-    expect(await held(), {'ctl_hex_1', 'ctl_hex_2'}, reason: 'nothing saved');
+        tester.widget<Text>(find.byKey(const ValueKey('pad-selected'))).data,
+        'Selected: RIFT-1, RIFT-2');
+
+    await tester.tap(find.byKey(const ValueKey('check-in-confirm')));
+    await settle(tester);
+    expect(await held(), containsAll(['ctl_rift_1', 'ctl_rift_2']));
+    final b = await LocalBookingRepository(db).getById(booking.id);
+    expect(b!.status, BookingStatus.checkedIn);
     await disposeApp(tester);
   });
 

@@ -29,9 +29,6 @@ class OpenPadAllocation {
     required this.resourceId,
     this.sessionId,
     this.segmentId,
-    this.groupId,
-    this.assignmentId,
-    this.playerNumber,
   });
 
   final String controllerId;
@@ -40,14 +37,11 @@ class OpenPadAllocation {
   final String resourceId;
   final String? sessionId;
   final String? segmentId;
-  final String? groupId;
-  final String? assignmentId;
-  final int? playerNumber;
 }
 
-/// Something occupying a station right now: an open single-session segment or
-/// an open group assignment. Used to spot stations whose pads are in players'
-/// hands WITHOUT being tracked (a count-only session).
+/// Something occupying a station right now: an open single-session segment.
+/// Used to spot stations whose pads are in players' hands WITHOUT being
+/// tracked (a count-only session).
 @immutable
 class StationOccupant {
   const StationOccupant({
@@ -56,7 +50,7 @@ class StationOccupant {
     required this.usesControllers,
   });
 
-  /// Segment id or assignment id.
+  /// Segment id.
   final String id;
   final String resourceId;
   final bool usesControllers;
@@ -67,13 +61,10 @@ enum PadAvailability {
   /// Usable and not held by anyone.
   free,
 
-  /// Held by the session / player being changed — may be kept.
+  /// Held by the session being changed — may be kept.
   yours,
 
-  /// Picked for another player in the same draft / group.
-  pickedForOther,
-
-  /// Held by another open session or player.
+  /// Held by another open session.
   inUse,
 
   /// At a station whose count-only session may have it in a player's hands.
@@ -98,7 +89,6 @@ class PadOption {
     required this.stationName,
     this.homeName,
     this.heldAt,
-    this.heldBy,
     this.note,
   });
 
@@ -112,17 +102,15 @@ class PadOption {
   /// Name of the pad's home station (where it belongs / returns to).
   final String? homeName;
 
-  /// When held by an open allocation: the station it is being used at, and
-  /// who holds it there ("Player 2" for a group; null for a single session).
+  /// When held by an open allocation: the station it is being used at.
   final String? heldAt;
-  final String? heldBy;
 
   /// Away from its home station (borrowed or re-homed).
   bool get awayFromHome =>
       controller.currentResourceId != controller.homeResourceId;
 
   /// Short staff-facing reason when not selectable: "faulty", "in use",
-  /// "Player 2", "HEX in use".
+  /// "HEX in use".
   final String? note;
 
   String get id => controller.id;
@@ -386,16 +374,14 @@ class PadSelection {
   static const int portCapacity = 4;
 
   /// Stations whose pads may be in players' hands without being tracked: an
-  /// open controller-using segment/assignment that holds no allocation.
+  /// open controller-using segment that holds no allocation.
   static Set<String> untrackedBusyStations({
     required List<StationOccupant> occupants,
     required List<OpenPadAllocation> open,
   }) {
     final holders = <String>{
-      for (final a in open) ...[
+      for (final a in open)
         if (a.segmentId != null) a.segmentId!,
-        if (a.assignmentId != null) a.assignmentId!,
-      ],
     };
     return {
       for (final o in occupants)
@@ -423,10 +409,8 @@ class PadSelection {
 
   /// The inventory as seen from [resourceId].
   ///
-  /// [keepIds] are pads the session/player being changed already holds (they
-  /// count as its own). [pickedForOthers] maps pad id → who in the current
-  /// draft or group already has it ("Player 2"). [busyStations] comes from
-  /// [untrackedBusyStations].
+  /// [keepIds] are pads the session being changed already holds (they count
+  /// as its own). [busyStations] comes from [untrackedBusyStations].
   PadBoard board({
     required String resourceId,
     required String resourceName,
@@ -435,7 +419,6 @@ class PadSelection {
     Map<String, String> resourceNames = const {},
     Set<String> busyStations = const {},
     Set<String> keepIds = const {},
-    Map<String, String> pickedForOthers = const {},
   }) {
     final held = {for (final a in open) a.controllerId: a};
     String name(String id) =>
@@ -457,9 +440,6 @@ class PadSelection {
           : resourceNames[c.currentResourceId] ?? c.currentResourceId;
       final holder = held[c.id];
       final heldAt = holder == null ? null : name(holder.resourceId);
-      final heldBy = holder?.playerNumber == null
-          ? null
-          : 'Player ${holder!.playerNumber}';
       // Availability of the PAD — independent of whether its station is free:
       // a pad can be held by a session at another station (borrowed), and a
       // free station can have none of its own pads on it.
@@ -467,13 +447,8 @@ class PadSelection {
           ? (PadAvailability.notUsable, c.status.label.toLowerCase())
           : keepIds.contains(c.id)
           ? (PadAvailability.yours, null)
-          : pickedForOthers.containsKey(c.id)
-          ? (PadAvailability.pickedForOther, pickedForOthers[c.id])
           : holder != null
-          ? (
-              PadAvailability.inUse,
-              heldBy == null ? 'in use at $heldAt' : '$heldBy at $heldAt',
-            )
+          ? (PadAvailability.inUse, 'in use at $heldAt')
           // A count-only session (no pads recorded) may have any pad at its
           // station in a player's hands — never offer those, here or away.
           : busyStations.contains(c.currentResourceId)
@@ -488,7 +463,6 @@ class PadSelection {
           stationName: station,
           homeName: name(c.homeResourceId),
           heldAt: heldAt,
-          heldBy: heldBy,
           note: note,
         ),
       );
@@ -585,12 +559,6 @@ class PadSelection {
                 'Pick a usable controller, or change its status in '
                 'Settings → Stations.',
             code: 'controller_unusable',
-          );
-        case PadAvailability.pickedForOther:
-          return Failure(
-            message: '$pad is already picked for ${o.note}.',
-            fix: 'Give each player a different controller.',
-            code: 'controller_duplicate',
           );
         case PadAvailability.inUse:
           return Failure(

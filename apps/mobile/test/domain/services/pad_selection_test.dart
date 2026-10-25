@@ -41,7 +41,6 @@ void main() {
     List<OpenPadAllocation> open = const [],
     Set<String> busy = const {},
     Set<String> keep = const {},
-    Map<String, String> others = const {},
   }) => sel.board(
     resourceId: station,
     resourceName: names[station]!,
@@ -50,7 +49,6 @@ void main() {
     resourceNames: names,
     busyStations: busy,
     keepIds: keep,
-    pickedForOthers: others,
   );
 
   group('inventory', () {
@@ -256,12 +254,6 @@ void main() {
         sel.check(c, boardAt('hex', open: open))!.code,
         'controller_taken',
       );
-    });
-
-    test('a pad picked for another player is refused, naming them', () {
-      final b = boardAt('hex', others: const {'hex_1': 'Player 1'});
-      const c = ControllerChoice.tracked(requested: 1, padIds: ['hex_1']);
-      expect(sel.check(c, b)!.message, 'HEX_1 is already picked for Player 1.');
     });
   });
 

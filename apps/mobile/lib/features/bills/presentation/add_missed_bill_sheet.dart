@@ -23,7 +23,6 @@ import 'package:arena_ops/domain/entities/activity.dart';
 import 'package:arena_ops/domain/entities/customer.dart';
 import 'package:arena_ops/domain/entities/resource.dart';
 import 'package:arena_ops/domain/value/enums.dart';
-import 'package:arena_ops/features/money/application/money_today.dart';
 import 'package:arena_ops/features/new_session/presentation/customer_picker_sheet.dart';
 import 'package:arena_ops/features/new_session/presentation/game_picker_sheet.dart';
 import 'package:flutter/material.dart';

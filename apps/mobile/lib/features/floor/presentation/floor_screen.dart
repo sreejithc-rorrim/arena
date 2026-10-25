@@ -7,12 +7,10 @@ import 'package:arena_ops/core/widgets/arena_header.dart';
 import 'package:arena_ops/core/widgets/connection_status.dart';
 import 'package:arena_ops/data/sync/sync_engine.dart';
 import 'package:arena_ops/domain/entities/activity.dart';
-import 'package:arena_ops/domain/entities/group_session.dart';
 import 'package:arena_ops/domain/entities/resource.dart';
 import 'package:arena_ops/domain/entities/session.dart';
 import 'package:arena_ops/domain/services/session_timer.dart';
 import 'package:arena_ops/domain/entities/booking.dart';
-import 'package:arena_ops/features/attendance/presentation/widgets/attendance_chip.dart';
 import 'package:arena_ops/features/floor/presentation/sheets/end_session_sheet.dart';
 import 'package:arena_ops/features/floor/presentation/sheets/extend_sheet.dart';
 import 'package:arena_ops/features/floor/presentation/sheets/session_actions_sheet.dart';
@@ -21,8 +19,6 @@ import 'package:arena_ops/features/floor/presentation/widgets/awaiting_payment.d
 import 'package:arena_ops/features/floor/presentation/station_detail_screen.dart';
 import 'package:arena_ops/features/floor/presentation/widgets/clock_banner.dart';
 import 'package:arena_ops/features/floor/presentation/widgets/station_card.dart';
-import 'package:arena_ops/features/group_sessions/presentation/group_detail_screen.dart';
-import 'package:arena_ops/features/group_sessions/presentation/group_session_screen.dart';
 import 'package:arena_ops/features/new_session/presentation/new_session_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -41,47 +37,10 @@ class FloorScreen extends ConsumerWidget {
     AppNav.to(context, NewSessionScreen(initialResource: resource));
   }
 
-  void _newGroup(BuildContext context, {Resource? resource}) {
-    AppNav.to(context, GroupSessionScreen(initialResource: resource));
-  }
-
-  void _showNewMenu(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.person_outline),
-              title: const Text('Single session'),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                _newSession(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.groups_outlined),
-              title: const Text('Group session'),
-              subtitle: const Text('Several players / systems, one timer'),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                _newGroup(context);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final active =
         ref.watch(activeSessionsProvider).value ?? const <ActiveSession>[];
-    final activeGroups =
-        ref.watch(activeGroupsProvider).value ?? const <ActiveGroupSession>[];
     final resources = ref.watch(resourcesProvider).value ?? const <Resource>[];
     final now = ref.watch(nowProvider).value ?? ref.watch(clockProvider).now();
 
@@ -108,14 +67,6 @@ class FloorScreen extends ConsumerWidget {
       }
     }
 
-    // Map each resource a group is using to that group + the open assignment.
-    final groupByResource =
-        <String, ({ActiveGroupSession group, GroupAssignment seg})>{
-          for (final g in activeGroups)
-            for (final seg in g.openAssignments)
-              seg.resourceId: (group: g, seg: seg),
-        };
-
     final warn = ref.watch(warnThresholdProvider);
     final noun = ref.watch(resourceNounProvider);
     // Types that pick a game: only their stations get "Games on this station".
@@ -128,14 +79,6 @@ class FloorScreen extends ConsumerWidget {
       final st = SessionTimer(
         startedAt: a.session.startedAt,
         scheduledEndAt: a.session.scheduledEndAt,
-        warnThreshold: warn,
-      ).state(now);
-      if (st != SessionVisualState.normal) endingSoon++;
-    }
-    for (final g in activeGroups) {
-      final st = SessionTimer(
-        startedAt: g.group.startedAt,
-        scheduledEndAt: g.group.scheduledEndAt,
         warnThreshold: warn,
       ).state(now);
       if (st != SessionVisualState.normal) endingSoon++;
@@ -172,18 +115,6 @@ class FloorScreen extends ConsumerWidget {
 
     Widget cardFor(Resource r) {
       final a = byResource[r.id];
-      final grp = groupByResource[r.id];
-      if (a == null && grp != null) {
-        return StationCard(
-          resource: r,
-          group: grp.group,
-          groupAssignment: grp.seg,
-          onTap: () => AppNav.to(
-            context,
-            GroupDetailScreen(groupId: grp.group.group.id),
-          ),
-        );
-      }
       return StationCard(
         resource: r,
         active: a,
@@ -210,7 +141,7 @@ class FloorScreen extends ConsumerWidget {
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'floor_fab',
-        onPressed: () => _showNewMenu(context),
+        onPressed: () => _newSession(context),
         icon: const Icon(Icons.add),
         label: const Text('New Session'),
       ),
@@ -225,12 +156,9 @@ class FloorScreen extends ConsumerWidget {
               overline:
                   ref.watch(cloudBindingProvider)?.arenaName ?? demoArenaLabel,
               title: 'Floor',
-              trailing: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [_SyncButton(), AttendanceChip()],
-              ),
+              trailing: const _SyncButton(),
               status: _FloorStatus(
-                playing: {...byResource.keys, ...groupByResource.keys}.length,
+                playing: byResource.length,
                 total: resources.length,
                 endingSoon: endingSoon,
               ),
@@ -241,13 +169,8 @@ class FloorScreen extends ConsumerWidget {
                 Builder(
                   builder: (context) {
                     final list = zones[kind]!;
-                    final inUse = list
-                        .where(
-                          (r) =>
-                              byResource.containsKey(r.id) ||
-                              groupByResource.containsKey(r.id),
-                        )
-                        .length;
+                    final inUse =
+                        list.where((r) => byResource.containsKey(r.id)).length;
                     return ArenaSectionLabel(
                       label: kindLabel[kind]!,
                       trailing: '$inUse/${list.length} in use',

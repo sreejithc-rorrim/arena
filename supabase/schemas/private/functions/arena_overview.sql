@@ -75,17 +75,12 @@ begin
                      count(*) filter (where e.value::bigint > 0) as bills
                 from live, jsonb_each_text(b->'methods') e group by e.key) t), '{}'::jsonb),
     'by_type', coalesce((select jsonb_object_agg(code, paise)
-        from (select activity_code as code, sum(amount_paise) as paise from (
-                select ch.activity_code, ch.amount_paise from session_charges ch
-                  join sessions s on s.id = ch.session_id
-                 where ch.arena_id = p_arena and s.status <> 'voided'
-                   and ch.segment_start >= p_from and ch.segment_start < p_to
-                union all
-                select ch.activity_code, ch.amount_paise from group_charges ch
-                  join group_sessions g on g.id = ch.group_id
-                 where ch.arena_id = p_arena and g.status <> 'voided'
-                   and ch.segment_start >= p_from and ch.segment_start < p_to) c
-              group by activity_code) t), '{}'::jsonb),
+        from (select ch.activity_code as code, sum(ch.amount_paise) as paise
+                from session_charges ch
+                join sessions s on s.id = ch.session_id
+               where ch.arena_id = p_arena and s.status <> 'voided'
+                 and ch.segment_start >= p_from and ch.segment_start < p_to
+              group by ch.activity_code) t), '{}'::jsonb),
     'top_games', coalesce((select jsonb_agg(jsonb_build_object('name', name, 'minutes', round(minutes))
                              order by minutes desc, name)
         from (select g.value as name,

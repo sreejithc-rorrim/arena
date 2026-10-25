@@ -25,6 +25,7 @@ export class OverviewStore {
   private loadedKey: string | null = null;
   private outOfDate = false;
   private currentPeriod: Period = 'today';
+  private currentDay: string | undefined;
   private latest = 0;
 
   constructor() {
@@ -39,16 +40,20 @@ export class OverviewStore {
     });
   }
 
-  async load(period: Period, force = false): Promise<void> {
+  /** `day` is the IST date the Day period shows (ignored by the others). */
+  async load(period: Period, day?: string, force = false): Promise<void> {
     this.currentPeriod = period;
+    this.currentDay = day;
     const arenaId = this.arena.current().id;
     if (!arenaId) return;
     const now = this.clock.now();
-    const range = periodRange(period, now);
-    const key = `${arenaId}|${period}|${range.from.toISOString()}`;
+    const range = periodRange(period, now, day);
+    // Another day is other figures: they are not shown while it loads.
+    const series = period === 'day' ? `${arenaId}|${period}|${day}` : `${arenaId}|${period}`;
+    const key = `${series}|${range.from.toISOString()}`;
     if (!force && !this.outOfDate && key === this.loadedKey) return;
     const call = ++this.latest;
-    if (!this.loadedKey?.startsWith(`${arenaId}|${period}|`)) this.data.set(null);
+    if (!this.loadedKey?.startsWith(`${series}|`)) this.data.set(null);
     this.loadedKey = key;
     this.outOfDate = false;
     this.range.set(range);
@@ -76,7 +81,7 @@ export class OverviewStore {
   }
 
   async refresh(): Promise<void> {
-    if (this.loadedKey) await this.load(this.currentPeriod, true);
+    if (this.loadedKey) await this.load(this.currentPeriod, this.currentDay, true);
   }
 
   /** Marks the figures out of date (a live update while the Overview is not open). */

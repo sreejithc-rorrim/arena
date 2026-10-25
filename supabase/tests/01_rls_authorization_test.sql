@@ -49,7 +49,6 @@ from unnest(array[
   'customers','rate_cards','rate_bands','rates','billing_policies','holidays',
   'game_categories','games','game_controls','game_resources','bookings','settings',
   'sessions','session_segments','session_extensions','session_charges','payments',
-  'group_sessions','group_assignments','group_extensions','group_charges','group_payments',
   'controller_allocations','controller_moves','audit_log']) t;
 
 select ok(not has_function_privilege('authenticated', f, 'EXECUTE'),

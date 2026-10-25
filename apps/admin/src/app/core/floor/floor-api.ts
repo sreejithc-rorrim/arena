@@ -6,7 +6,6 @@ import { SyncOp, pushOps } from '../sync/push-ops';
 import {
   Activity,
   AgeRating,
-  BillKind,
   BillStatus,
   CompatStatus,
   Game,
@@ -53,7 +52,12 @@ export abstract class FloorApi {
   /** Per-game minutes, bills and live plays since `since` (arena_game_stats). */
   abstract gameFigures(arenaId: string, since: Date): Promise<ReadonlyMap<string, GameFigures>>;
   /** The members who played a game most since `since` (arena_game_fans). */
-  abstract gameFans(arenaId: string, gameId: string, since: Date, limit: number): Promise<GameFan[]>;
+  abstract gameFans(
+    arenaId: string,
+    gameId: string,
+    since: Date,
+    limit: number,
+  ): Promise<GameFan[]>;
   /** A station's (or member's) newest bills since `since`, and a member's minutes per game. */
   abstract activity(
     arenaId: string,
@@ -265,30 +269,20 @@ class SupabaseFloorApi extends FloorApi {
     });
   }
 
-
   async plays(arenaId: string, since: Date): Promise<Play[]> {
     const window = `ended_at.is.null,started_at.gte.${since.toISOString()}`;
     const cols = 'id, resource_id, activity_code, game_id, controller_count, started_at, ended_at';
-    const [segments, assignments] = await Promise.all([
-      this.all(
-        'session_segments',
-        `${cols}, session_id, sessions!inner(customer_id, status, scheduled_end_at)`,
-        arenaId,
-        (q) => q.or(window),
-      ),
-      this.all(
-        'group_assignments',
-        `${cols}, group_id, group_sessions!inner(primary_customer_id, status, scheduled_end_at)`,
-        arenaId,
-        (q) => q.or(window),
-      ),
-    ]);
-    const play = (r: Row, kind: BillKind, billId: string, parent: Row | null | undefined) => ({
+    const segments = await this.all(
+      'session_segments',
+      `${cols}, session_id, sessions!inner(customer_id, status, scheduled_end_at)`,
+      arenaId,
+      (q) => q.or(window),
+    );
+    const play = (r: Row, billId: string, parent: Row | null | undefined) => ({
       id: String(r['id']),
-      kind,
       billId,
       billStatus: (parent?.['status'] as BillStatus) ?? 'completed',
-      customerId: String(parent?.['customer_id'] ?? parent?.['primary_customer_id'] ?? ''),
+      customerId: String(parent?.['customer_id'] ?? ''),
       resourceId: String(r['resource_id']),
       activityCode: String(r['activity_code']),
       gameId: str(r['game_id']),
@@ -297,13 +291,8 @@ class SupabaseFloorApi extends FloorApi {
       endedAt: str(r['ended_at']),
       scheduledEndAt: String(parent?.['scheduled_end_at'] ?? r['started_at']),
     });
-    return [
-      ...segments.map((r) => play(r, 'single', String(r['session_id']), one(r['sessions']))),
-      ...assignments.map((r) => play(r, 'group', String(r['group_id']), one(r['group_sessions']))),
-    ];
+    return segments.map((r) => play(r, String(r['session_id']), one(r['sessions'])));
   }
-
-
 
   async stationFigures(
     arenaId: string,
@@ -379,7 +368,6 @@ class SupabaseFloorApi extends FloorApi {
     return {
       bills: (d?.bills ?? []).map((b) => ({
         billId: String(b['bill_id']),
-        kind: b['kind'] === 'group' ? 'group' : 'single',
         startedAt: String(b['started_at']),
         status: (b['status'] as BillStatus) ?? 'completed',
         billedPaise: b['billed_paise'] == null ? null : Number(b['billed_paise']),
@@ -470,14 +458,12 @@ class SupabaseFloorApi extends FloorApi {
       if (error) throw dbError(error);
       return n ?? 0;
     };
-    const [segments, openSegments, players, openPlayers, bookings] = await Promise.all([
+    const [segments, openSegments, bookings] = await Promise.all([
       count('session_segments', false),
       count('session_segments', true),
-      count('group_assignments', false),
-      count('group_assignments', true),
       count('bookings', false),
     ]);
-    return { playingNow: openSegments + openPlayers, records: segments + players + bookings };
+    return { playingNow: openSegments, records: segments + bookings };
   }
 
   async deleteGame(arenaId: string, id: string): Promise<void> {

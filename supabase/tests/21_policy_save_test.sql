@@ -1,6 +1,6 @@
 -- policy.save (op_policy_save), the billing rules the dashboard's Settings → Billing rules and the
 -- floor app's Billing rules screen write: the settings permission; the whole policy overwritten,
--- group_billing_mode read from inside `policy`; a 'Default' row created when the arena has none,
+-- read from inside `policy` (a retired group_billing_mode key is ignored); a 'Default' row created when the arena has none,
 -- else the oldest active row updated; a missing or bad field refused with nothing written; the
 -- new rules in the pricing snapshot and the previous price list retired; replays and other
 -- arenas untouched.
@@ -45,7 +45,7 @@ create function pg_temp.policy(changes jsonb default '{}') returns jsonb as $$
     "grace_minutes":5,"minimum_charge_minutes":30,"early_exit":"planned","rounding_scope":"segment",
     "late_arrival":"planned","vr_unit_rounding":"prorate","money_rounding_paise":500,
     "money_rounding_dir":"up","payment_timing":"end","allow_extend_past_close":true,
-    "cleaning_gap_minutes":10,"group_billing_mode":"shared_controller_pool"}'::jsonb || changes)
+    "cleaning_gap_minutes":10}'::jsonb || changes)
   $$ language sql;
 create function pg_temp.saved() returns jsonb as $$
   select to_jsonb(p) - array['id','arena_id','name','active','created_at','updated_at','sync_xid']
@@ -83,7 +83,7 @@ select results_eq(
       where arena_id = 'e0000000-0000-4000-8000-000000000210' $$,
   $$ values ('Default', true) $$, 'a Default policy row is created for the arena');
 select is(pg_temp.saved(), pg_temp.policy()->'policy',
-  'every field is stored as sent, group_billing_mode included (read from inside policy)');
+  'every field is stored as sent (read from inside policy)');
 select is(_pricing_snapshot('e0000000-0000-4000-8000-000000000210'::uuid)->'policy',
   pg_temp.policy()->'policy', 'new sessions are priced on the new rules (pricing snapshot)');
 select is(pg_temp.history(), 1, 'the previous price list is retired, so a session priced on it still validates');
@@ -97,14 +97,10 @@ select is(pg_temp.push(pg_temp.policy(), (select id from op1))->>'replayed', 'tr
 select is(pg_temp.push(pg_temp.policy())->>'status', 'applied', 'saving the same rules again is fine');
 select is(pg_temp.history(), 1, '... and retires nothing (the price list did not change)');
 
--- ------------------------------------------------ 4. group mode
-select is(pg_temp.push(pg_temp.policy() #- '{policy,group_billing_mode}')->>'status', 'applied',
-  'a policy without group_billing_mode is accepted');
-select is(pg_temp.saved()->>'group_billing_mode', 'per_system', '... and groups go back to per system');
-select is(pg_temp.push(pg_temp.policy() #- '{policy,group_billing_mode}'
-    || '{"group_billing_mode":"shared_controller_pool"}')->>'status', 'applied',
-  'a group mode beside policy (not inside it) ...');
-select is(pg_temp.saved()->>'group_billing_mode', 'per_system', '... is not read: clients send it inside policy');
+-- ------------------------------------------------ 4. a retired key from an older client
+select is(pg_temp.push(pg_temp.policy(jsonb_build_object('group_billing_mode', 'shared_controller_pool')))
+    ->>'status', 'applied', 'a policy still carrying group_billing_mode is accepted ...');
+select is(pg_temp.saved(), pg_temp.policy()->'policy', '... and the key is ignored');
 
 -- ------------------------------------------------ 5. refusals write nothing
 select is(pg_temp.push(pg_temp.policy())->>'status', 'applied', 'back to the full rules');

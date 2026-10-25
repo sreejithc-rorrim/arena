@@ -76,7 +76,6 @@ const BILL_HEAD = [
   'No.',
   'Bill',
   'Bill ID',
-  'Type',
   'Start',
   'End',
   'Minutes',
@@ -131,16 +130,16 @@ function totalsRow(label: string, bills: readonly Bill[], counts: boolean): stri
   const playerMinutes = bills.reduce((n, b) => n + b.playerMinutes, 0);
   const cells = Array<string>(BILL_HEAD.length).fill('');
   cells[0] = textCell(label);
-  cells[7] = String(minutes);
-  cells[8] = hours(minutes);
-  cells[13] = hours(playerMinutes);
-  cells[16] = money(bills.reduce((n, b) => n + (b.billedPaise ?? 0), 0));
-  cells[17] = counts ? money(s.expectedPaise) : money(0);
-  PAY_METHODS.forEach((m, i) => (cells[18 + i] = money(s.byMethod[m])));
-  cells[22] = money(s.takingsPaise);
-  cells[23] = money(s.refundedPaise);
-  cells[24] = counts ? money(s.duePaise) : money(0);
-  cells[25] = counts ? money(s.writtenOffPaise) : money(0);
+  cells[6] = String(minutes);
+  cells[7] = hours(minutes);
+  cells[12] = hours(playerMinutes);
+  cells[15] = money(bills.reduce((n, b) => n + (b.billedPaise ?? 0), 0));
+  cells[16] = counts ? money(s.expectedPaise) : money(0);
+  PAY_METHODS.forEach((m, i) => (cells[17 + i] = money(s.byMethod[m])));
+  cells[21] = money(s.takingsPaise);
+  cells[22] = money(s.refundedPaise);
+  cells[23] = counts ? money(s.duePaise) : money(0);
+  cells[24] = counts ? money(s.writtenOffPaise) : money(0);
   return row(cells);
 }
 
@@ -165,7 +164,6 @@ export function billsCsv(bills: readonly Bill[], meta: ReportMeta): string {
       String(numbers.get(b.id) ?? ''),
       b.ref,
       b.id,
-      b.kind === 'group' ? 'Group' : 'Single',
       formatHm(b.startedAt),
       b.endedAt ? formatHm(b.endedAt) : '',
       String(minutes),

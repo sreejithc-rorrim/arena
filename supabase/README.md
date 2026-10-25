@@ -47,12 +47,11 @@ missing revoke shows up as a generated `grant … to anon` — reject that migra
 | `service_role` / `postgres` | Everything (dashboard, SQL editor, `bootstrap_owner`). Never shipped in an app, and no deployed code uses it. |
 
 - **Direct reads (RLS — dashboard queries and Realtime Postgres Changes).** Every arena table:
-  active members (`private.app_arena_ids()`). `payments`, `group_payments`, `session_charges`,
-  `group_charges`: members holding `bill`, `money` or `reports` (or role owner). `customers`:
+  active members (`private.app_arena_ids()`). `payments`, `session_charges`: members holding `bill`, `money` or `reports` (or role owner). `customers`:
   `start`, `members`, `money` or `reports` (or owner). `audit_log`: owner level only.
-  `attendance_punches`, `attendance_entries`, `attendance_requests`: a member's own rows (`private.app_my_staff_ids()`),
-  everyone's with `attendance_review` (or owner). These are **not** in the sync feed: the floor app
-  reads them online and punches straight through `sync_push` (server time, no outbox).
+  `staff_personal_details`, `staff_terms_acceptances`: a member's own rows
+  (`private.app_my_staff_ids()`), everyone's at owner level. These are **not** in the sync feed:
+  the floor app reads them online.
   `staff_invites`: no client access at all. These go through
   `private.app_arena_ids_with(perms)`. The **device sync feed** (`sync_pull`,
   `sync_fetch_entity`, SECURITY DEFINER) narrows the same way (`_sync_hidden`): customers need
@@ -75,7 +74,7 @@ missing revoke shows up as a generated `grant … to anon` — reject that migra
 - **The server prices money itself.** Bills and extensions are re-priced from the session's
   frozen price list (`_pr_*`) and refused on any one-paisa mismatch.
 - **Permissions.** `staff_profiles.perms` ⊆ `start, bill, discount, members, stations, money,
-  reports, settings`. `role = 'owner'` implies all. Holding `money` or `reports` makes a member
+  reports, settings, bill_edit, bill_record`. `role = 'owner'` implies all. Holding `money` or `reports` makes a member
   *owner level* (`app_is_owner`, same rule as the app). Only owner-level members grant or remove
   `money`/`reports` or edit an owner-level member; nobody changes their own perms.
 - **Two routes to ownership; everyone else joins by invitation.** A new arena owner registers on the admin
@@ -109,11 +108,11 @@ missing revoke shows up as a generated `grant … to anon` — reject that migra
   `sync_push` (`staff.update`; a field the op leaves out keeps its value). The floor app
   (`apps/mobile`) only signs in, with the person's own e-mail and password.
 - **Sales are read through owner-level RPCs.** The dashboard's Sales screen lists closed bills
-  (completed or voided sessions and groups, by close time, at most 93 days) with
+  (completed or voided sessions, by close time, at most 93 days) with
   `arena_sales()` (each bill with its payments ledger, returning-customer flag, player-minutes,
   who/when of a void and the server's receipt time) and opens one with `arena_sale()` (charge
   lines, extensions, audit history, void record); both share the server-only `_sales()`.
-- **Financial corrections append, never edit.** A void is a `session.void` / `group.void` op and
+- **Financial corrections append, never edit.** A void is a `session.void` op and
   needs a reason (`void_reason_required`); it keeps the bill and its payments (voiding never
   refunds). Money taken before a void can be refunded (`payment.record` with `is_refund`, reason
   required, never more than collected); a voided bill takes no new payment (`voided`). A payment
@@ -121,16 +120,16 @@ missing revoke shows up as a generated `grant … to anon` — reject that migra
   required): a refund row on the old method and a payment row on the new one, in one
   transaction, never more than the payment (`already_corrected`, `amount_invalid`); those rows
   are flagged `correction` in the ledger and are not counted as refunds. A waive at the end of a
-  session or group writes an audit entry with the amount written off and the staff reason. Every
+  session writes an audit entry with the amount written off and the staff reason. Every
   void, waive and correction is in `audit_log` with who, when, why and the before/after amounts.
 - **History is append-only.** There are no delete policies; payments, moves, extensions and
   audit rows are only ever added.
 - **Catalog rows that history names are archived, not deleted.** A game is archived with
   `game.set_active` (hidden from new sessions and bookings on every device; sessions already
   playing it continue; bills keep showing it). `game.delete` removes only a game no session
-  segment, group player, pad allocation or booking ever named, with its station statuses and
+  segment, pad allocation or booking ever named, with its station statuses and
   control guide, after locking the row (a start racing it either commits first and the delete is
-  refused, or fails on the foreign key); `session_segments`, `group_assignments` and
+  refused, or fails on the foreign key); `session_segments` and
   `controller_allocations` reference `games` with no cascade, so even a direct delete of a used
   game fails. A deleted id is never re-created by a queued `game.upsert` (`not_found`), and an
   edit that saw a different active flag than the stored one is refused (`stale`) instead of
@@ -148,11 +147,9 @@ missing revoke shows up as a generated `grant … to anon` — reject that migra
 | Pricing & rules | `rate_cards`, `rates`, `rate_bands`, `billing_policies`, `holidays`, `settings`, `pricing_rules` (day/time adjustments judged at a session's start), `pricing_catalog_history` |
 | Discounts | `discounts` (presets and coupons), `bill_discounts` (the discount applied to a bill, a copy of what was used; one per bill) |
 | Single sessions | `sessions` → `session_segments`, `session_extensions`, `session_charges`, `payments` |
-| Group sessions | `group_sessions` → `group_assignments`, `group_extensions`, `group_charges`, `group_payments` |
 | Pads in use | `controller_allocations`, `controller_moves` |
 | Bookings & audit | `bookings`, `audit_log` |
-| Attendance (online only, not in `sync_pull`) | `attendance_punches` (immutable evidence: server time, device time, GPS fix, mock flag, geofence verdict and the rules used), `attendance_entries` (clock-in → clock-out stretches; one open per person, no overlaps; corrections supersede, never edit), `attendance_requests` (staff missed-punch requests: pending / approved / rejected; never read by `_att_day`). Rules in `settings` key `attendance`. Design: `docs/STAFF.md` |
-| Staff: shifts, leave, pay (online only, not in `sync_pull`; contract `docs/STAFF_API.md`) | `staff_hr_profiles`, `shifts`, `staff_shifts`, `staff_holidays` (separate from pricing `holidays`), `leave_requests` (paid / LOP split pinned to dates in `day_split`), `leave_adjustments`, `staff_pay_rates`, `pay_policies` (both effective-dated, payroll only), `salary_runs` (draft → finalised locks the period), `salary_run_lines` (timesheet + breakdown), `salary_deduction_decisions` (owner keep / waive), `salary_adjustments` (append-only), `staff_personal_details` (own row + owner level), `staff_terms` (append-only versions) and `staff_terms_acceptances`. Settings keys `work_hours`, `leave_rules` |
+| Staff records (online only, not in `sync_pull`) | `staff_personal_details` (own row + owner level), `staff_terms` (append-only versions) and `staff_terms_acceptances`. The staff-time module (attendance, shifts, leave, pay, payroll) was removed on 2026-10-24; it is kept at the git tag `staff-module-archive` |
 | Sync (server-only) | `sync_ops`, `sync_tombstones`; views `sync_v_arenas`, `sync_v_bookings`, `sync_v_rates`, `sync_v_resource_activities` |
 
 Money is `bigint` paise; instants are `timestamptz` (UTC); business days are Asia/Kolkata.
@@ -166,11 +163,11 @@ cursor), stamped by the `sync_stamp` trigger; deletes leave a row in `sync_tombs
 | **Client API** (`authenticated`) | `sync_push`, `sync_pull`, `sync_fetch_entity`, `my_arenas`, `create_my_arena`, `invite_member`, `accept_invite`, `revoke_invite`, `arena_invites`, `arena_staff`, `arena_sales`, `arena_sale`, `arena_pricing`, `arena_overview`, `arena_station_stats`, `arena_game_stats`, `arena_game_fans`, `arena_members`, `arena_activity`, `arena_discount_usage`, `app_is_owner`, `my_bills` (floor app's My bills: the caller's own closed bills of one IST day as `_sales` summaries; `bill_edit` or `bill_record`), `session_quote` (the price of a missed single session on the current price list; `bill_record`), `station_type_catalog` / `accessory_kind_catalog` (the global ready-made station and accessory types an owner picks from; data in the function body, reads no table) — the dashboard's reads are aggregated on the server (`_plays`, `_bill_minutes`) so screens download figures, not history; each a `security invoker` wrapper in `public` over its SECURITY DEFINER body in `private` |
 | RLS helpers (`private`, not client API) | `private.app_arena_ids`, `private.app_has_perm`, `private.app_is_owner`, `private.app_arena_ids_with(perms)`, `private.app_my_staff_ids()`, `private.can_use_arena_topic(topic)` — executable by `authenticated` because policies run as the caller; `private` is not an exposed schema |
 | Operator only | `bootstrap_owner` |
-| Sync ops (`op_*`, via `sync_push`) | sessions: `op_session_start/_reconfigure/_extend/_end/_void`; groups: `op_group_create/_add/_switch/_end_player/_extend/_end/_void`; money: `op_payment`, `op_payment_correct`, `op_bill_adjust` (Edit bill: new total, collected made to match; `money`, or `bill_edit` on a bill the caller started), `op_session_record` (`session.record`: a missed single session added ended, priced and paid; `bill_record`); accessories: `op_controller_move/_upsert/_set_status` (only pads — `_is_pad` — are allocated or borrowed by a start), `op_accessory_kind_upsert/_remove`; time rules: `op_rule_upsert/_delete/_reorder`; discounts: `op_discount_upsert/_set_active/_delete` (applied at `session.end` / `group.end` by `_discount_apply`); customers & bookings: `op_customer_*`, `op_booking_*`; settings: `op_game_*` (`game.delete` removes only a game nothing ever used — in play → `game_in_play`, with history → `game_has_history`, archive it with `game.set_active` instead), `op_resource_*`, `op_rate_*`, `op_policy_save`, `op_settings_save` (keys `business_hours`, `floor_options`, `discount_options`, `venue_profile`, `attendance` — validated by `_floor_options` / `_discount_options` / `_venue_profile` / `_attendance_settings`), `op_holiday_*`, `op_staff_update`, `op_arena_update` (arena name, area, phone); attendance: `op_attendance_punch` (`attendance.punch`: the caller's own clock-in / clock-out at server time; geofence by `_geo_distance_m` against `_attendance_rules`; block / flag / allow, mock rule; closes a forgotten clock-in at the shift end), `op_attendance_correct` / `op_attendance_review`, `op_attendance_request` (`time_request`) / `op_attendance_request_decide` (staff missed-punch requests, applied through the correction on approval); staff: `op_shift_upsert/_assign/_unassign`, `op_staff_holiday_upsert/_delete`, `op_hr_profile_save`, `op_staff_details_save`, `op_terms_publish/_accept`, `op_leave_request/_cancel/_decide/_adjust`, `op_pay_rate_add`, `op_pay_policy_add`, `op_salary_run_create/_recalculate/_set_deduction/_finalise/_discard`, `op_salary_adjustment_add/_reverse`. The one day calculation behind the floor, the dashboard and salary is `_att_day`; a salary line is `_pay_build_line` |
+| Sync ops (`op_*`, via `sync_push`) | sessions: `op_session_start/_reconfigure/_extend/_end/_void`; money: `op_payment`, `op_payment_correct`, `op_bill_adjust` (Edit bill: new total, collected made to match; `money`, or `bill_edit` on a bill the caller started), `op_session_record` (`session.record`: a missed single session added ended, priced and paid; `bill_record`); accessories: `op_controller_move/_upsert/_set_status` (only pads — `_is_pad` — are allocated or borrowed by a start), `op_accessory_kind_upsert/_remove`; time rules: `op_rule_upsert/_delete/_reorder`; discounts: `op_discount_upsert/_set_active/_delete` (applied at `session.end` by `_discount_apply`); customers & bookings: `op_customer_*`, `op_booking_*`; settings: `op_game_*` (`game.delete` removes only a game nothing ever used — in play → `game_in_play`, with history → `game_has_history`, archive it with `game.set_active` instead), `op_resource_*`, `op_rate_*`, `op_policy_save`, `op_settings_save` (keys `business_hours`, `floor_options`, `discount_options`, `venue_profile`, `offline_rules` — validated by `_floor_options` / `_discount_options` / `_venue_profile` / `_offline_rules`), `op_holiday_*`, `op_staff_update`, `op_arena_update` (arena name, area, phone); staff: `op_staff_details_save`, `op_terms_publish/_accept` |
 | Sync plumbing | `_sync_apply` (op kind → `op_*`), `_sync_sources` |
-| Server pricing | `_pr_*` (port of the app's PricingService / SegmentBilling / GroupBilling; `_pr_rule` / `_pr_rule_price` apply a time rule to each unit price), `_pricing_snapshot` (carries `rules` only when there are active ones), `_pricing_canon`, `_pricing_grace`, `_assert_snapshot`, `_price_mismatch`, `_discount_apply` |
-| Floor rules | `_need`, `_lock_resources`, `_lock_pads`, `_station_*`, `_group_*`, `_pad_*`, `_single_supply`, `_game_*`, `_booking_free`, `_free_pads_at`, `_usable_pads_at`, `_untracked_busy`, … |
-| Triggers | `sync_stamp`, `sync_record_delete`, `set_updated_at`, `_assert_same_arena`, `assert_resource_free_for_segment`, `assert_resource_free_for_assignment`, `assert_controller_free_for_allocation` |
+| Server pricing | `_pr_*` (port of the app's PricingService / SegmentBilling; `_pr_rule` / `_pr_rule_price` apply a time rule to each unit price), `_pricing_snapshot` (carries `rules` only when there are active ones), `_pricing_canon`, `_pricing_grace`, `_assert_snapshot`, `_price_mismatch`, `_discount_apply` |
+| Floor rules | `_need`, `_lock_resources`, `_lock_pads`, `_station_*`, `_pad_*`, `_single_supply`, `_game_*`, `_booking_free`, `_free_pads_at`, `_untracked_busy`, … |
+| Triggers | `sync_stamp`, `sync_record_delete`, `set_updated_at`, `_assert_same_arena`, `assert_resource_free_for_segment`, `assert_controller_free_for_allocation` |
 
 Each function file starts with a header explaining what it does, who calls it, what it
 checks and which errors it raises; the same summary is stored as `comment on function`
@@ -186,26 +183,22 @@ checks and which errors it raises; the same summary is stored as `comment on fun
 | `08_server_pricing_test.sql` | Server re-prices bills and refuses mismatches |
 | `09_account_provisioning_test.sql` | `bootstrap_owner`, `create_my_arena` (confirmation, names, one-arena limit), `arena_staff`; no function links an existing login silently |
 | `10_integrity_authz_test.sql` | Payments fit the bill, owner protection, pad-move permission |
-| `11_ported_floor_test.sql` | Sessions, payments and groups through `sync_push` |
+| `11_ported_floor_test.sql` | Sessions and payments through `sync_push` |
 | `12_ported_pads_test.sql` | Controller allocation, borrowing and moves through `sync_push` |
 | `13_security_hardening_test.sql` | Client surface, RLS shape, owner-level perms, integrity checks |
-| `14_admin_sales_test.sql` | `arena_sales` / `arena_sale`: who may read, half-open close-time ranges, voided bills, group lines |
+| `14_admin_sales_test.sql` | `arena_sales` / `arena_sale`: who may read, half-open close-time ranges, voided bills |
 | `15_catalog_from_scratch_test.sql` | An empty arena built only through `sync_push` (`activity.upsert` rules, rate, station, pad, game, compat) runs a session |
 | `16_admin_catalog_details_test.sql` | A game's age rating and media (`game.upsert`), the arena's name/area/phone (`arena.update`); edits from builds that do not send the new fields keep them |
 | `17_staff_invites_test.sql` | `invite_member` → `accept_invite`: works once, only for the confirmed invited login, only for its arena, only while the inviter keeps the authority; `revoke_invite`, `arena_invites` |
 | `18_realtime_and_sensitive_reads_test.sql` | Direct reads of money, customer and audit rows; who may use an arena's private Realtime channel; which tables Realtime announces |
 | `19_game_lifecycle_test.sql` | Game names (trimmed, unique ignoring case); archive/restore while in play; `game.delete` only for a never-used game (in play, past sessions or bookings refused; FK backstop), tombstones, idempotent retries, no resurrection by a queued edit, edits over a newer archive refused (`base_active`), station notes kept, cross-arena and permission refusals |
 | `20_floor_and_config_ops_test.sql` | `booking.update` (stale, conflict, closed), `booking.set_status` (cancel, no-show), `controller.set_status`, `resource.set_mode`, `holiday.upsert` / `holiday.delete` |
-| `22_sales_corrections_test.sql` | A void needs a reason; refunds after a void (never more than collected, no new payments); waives audited with the amount written off; `payment.correct` (permission, reason, same method, part moves, no over-correction, replay, groups); `arena_sales` returning customer, player-minutes, ledger with correction rows, void who/when; every bill's methods = ledger = collected |
+| `22_sales_corrections_test.sql` | A void needs a reason; refunds after a void (never more than collected, no new payments); waives audited with the amount written off; `payment.correct` (permission, reason, same method, part moves, no over-correction, replay); `arena_sales` returning customer, player-minutes, ledger with correction rows, void who/when; every bill's methods = ledger = collected |
 | `23_accessories_test.sql` | Accessory kinds (owner-defined, unique names, retire vs delete), `controllers.kind_id` kept by edits that omit it, only pads allocated / borrowed / counted, every accessory moved with history, a type code derived from its name |
 | `24_pricing_rules_test.sql` | Rules by day, window, holidays, dates and type; priority and `rule.reorder`; a whole session priced by its start; % and ₹/h both ways, never below ₹0; snapshot and canon unchanged without rules; `session.end` billed with the rule |
-| `25_discounts_test.sql` | Presets, coupons and manual discounts on `session.end` / `group.end`: expiry, use limit (voids free a use), scope, minimum bill, staff cap and reason, permission, recomputed amount; `bill_discounts`, `_sales`, `arena_discount_usage` paging |
+| `25_discounts_test.sql` | Presets, coupons and manual discounts on `session.end`: expiry, use limit (voids free a use), scope, minimum bill, staff cap and reason, permission, recomputed amount; `bill_discounts`, `_sales`, `arena_discount_usage` paging |
 | `26_admin_reads_test.sql` | `arena_overview`, `arena_station_stats`, `arena_game_stats`, `arena_game_fans`, `arena_members`, `arena_activity`: owner only, figures without voided bills |
-| `28_attendance_punch_test.sql` | `attendance.punch`: server time (not the phone's), the `attendance` setting's validation and permission, inside / outside / unknown (no geofence, weak GPS, no fix) under flag, block and allow, mock block / flag, one open entry, the automatic close after `max_open_hours` (on clock-in and on a late clock-out), replay and duplicate ids, payload checks; own rows vs `attendance_review` vs another arena; anon and direct op calls refused |
-| `29_shifts_hours_corrections_test.sql` | New permissions (payroll owner-level only), `work_hours` / `leave_rules` validation, shifts (midnight, duplicate names), assignments (overlap), staff holidays, `_att_day` (present / late / half day / absent / week off / holiday, break, rounding, split and midnight shifts, extra hours), corrections (edit / void / add, history, own record, overlap, review), forgotten clock-outs at the shift end, `attendance_days` access |
-| `30_leave_test.sql` | Leave years from the joining date (29 Feb), requests (planned / unplanned, half days, working days only, overlap), the paid / LOP split pinned to dates, cancellation, adjustments, own record, the finalised-period lock, `leave_balances` access |
-| `31_payroll_test.sql` | The three worked examples of `docs/STAFF.md` to the paisa, keep / waive surviving a rebuild, adjustments and reversals, finalise and its locks, discard, overlap, `net_negative`, payroll vs payroll_finalise, staff read no pay |
 | `27_venue_types_test.sql` | `station_type_catalog` validity and grants; `venue_profile` validation and permission; a mixed venue built from the catalog runs a pool session and a turf booking to payment with no game or controllers; booking overlap refused across sports; started-hour turf billing |
-| `21_policy_save_test.sql` | `policy.save`: settings permission (owner-level managers without it refused), a `Default` row created or the oldest active row overwritten, every field stored (group mode read from inside `policy`), new rules in the pricing snapshot and the old price list retired, refusals of missing or bad fields write nothing, replays, other arenas |
+| `21_policy_save_test.sql` | `policy.save`: settings permission (owner-level managers without it refused), a `Default` row created or the oldest active row overwritten, every field stored (read from inside `policy`; a retired `group_billing_mode` key is ignored), new rules in the pricing snapshot and the old price list retired, refusals of missing or bad fields write nothing, replays, other arenas |
 
 Every file creates and isolates its own arena and rolls back.

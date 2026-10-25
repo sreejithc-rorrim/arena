@@ -14,7 +14,7 @@
 -- Checks / errors: forbidden; invalid_code; invalid_name (1–40 characters);
 -- not_found (hint activity: the id belongs to another arena); code_locked
 -- (changing an existing type's code); activity_busy (switching
--- uses_controllers while a session or group player of this type is running);
+-- uses_controllers while a session of this type is running);
 -- duplicate (code already used by another type); invalid (bad duration_model).
 -- Writes: activities. A price-list change: _sync_apply retires the previous
 -- catalog into pricing_catalog_history. Returns: {}.
@@ -65,11 +65,9 @@ begin
     if v_old.code <> v_code then
       raise exception 'code_locked' using hint = v_old.code;
     end if;
-    if v_old.uses_controllers <> v_pads and (
-         exists (select 1 from session_segments
-                  where arena_id = p_arena and activity_code = v_code and ended_at is null)
-      or exists (select 1 from group_assignments
-                  where arena_id = p_arena and activity_code = v_code and ended_at is null)) then
+    if v_old.uses_controllers <> v_pads
+       and exists (select 1 from session_segments
+                    where arena_id = p_arena and activity_code = v_code and ended_at is null) then
       raise exception 'activity_busy' using hint = v_code;
     end if;
   end if;

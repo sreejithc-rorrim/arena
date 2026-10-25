@@ -1,8 +1,8 @@
 -- _same_ids(a, b) — do two uuid arrays hold the same set of ids?
 --
 -- Compares as sets: order and duplicates are ignored, null counts as empty.
--- Used by op_session_end / op_group_end to check that the segments or
--- assignments the device priced are exactly the ones the server holds.
+-- Used by op_session_end to check that the segments
+-- the device priced are exactly the ones the server holds.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._same_ids (
   a uuid[],

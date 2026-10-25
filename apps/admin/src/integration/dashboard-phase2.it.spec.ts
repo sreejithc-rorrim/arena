@@ -40,7 +40,10 @@ describe.skipIf(!IT_RUN)('integration · dashboard phase 2 (owner sees the floor
     if (!bill) {
       throw new Error(
         `session ${floorRun.session_id} not on the Sales list (${bills.length} bills in range; ` +
-          `newest: ${bills.slice(0, 3).map((b) => `${b.id} ${b.at}`).join(', ')})`,
+          `newest: ${bills
+            .slice(0, 3)
+            .map((b) => `${b.id} ${b.at}`)
+            .join(', ')})`,
       );
     }
     expect(bill).toMatchObject({
@@ -69,7 +72,8 @@ describe.skipIf(!IT_RUN)('integration · dashboard phase 2 (owner sees the floor
     const net = (ledger ?? []).reduce((sum, p) => sum + Number(p.amount_paise), 0);
     expect(net).toBe(bill.paidPaise);
     const byMethod: Record<string, number> = {};
-    for (const p of ledger ?? []) byMethod[p.method] = (byMethod[p.method] ?? 0) + Number(p.amount_paise);
+    for (const p of ledger ?? [])
+      byMethod[p.method] = (byMethod[p.method] ?? 0) + Number(p.amount_paise);
     expect(bill.methods).toEqual(byMethod);
     // The day's summary on the dashboard is the sum of the same bills.
     const summary = summarize(bills);
@@ -174,21 +178,13 @@ describe.skipIf(!IT_RUN)('integration · dashboard phase 2 (owner sees the floor
 
       // The database itself, read through RLS as the owner: every payment row of these bills.
       const db = await TestBed.inject(Supabase).client();
-      const ids = (kind: string) => {
-        const list = bills.filter((b) => b.kind === kind).map((b) => b.id);
-        return list.length ? list : ['00000000-0000-0000-0000-000000000000'];
-      };
+      const ids = bills.length ? bills.map((b) => b.id) : ['00000000-0000-0000-0000-000000000000'];
       const singles = await db
         .from('payments')
         .select('amount_paise, method')
-        .in('session_id', ids('single'));
-      const groups = await db
-        .from('group_payments')
-        .select('amount_paise, method')
-        .in('group_id', ids('group'));
+        .in('session_id', ids);
       expect(singles.error).toBeNull();
-      expect(groups.error).toBeNull();
-      const rows = [...(singles.data ?? []), ...(groups.data ?? [])];
+      const rows = singles.data ?? [];
       const dbNet = rows.reduce((n, r) => n + Number(r.amount_paise), 0);
       const paise = (cell: string | undefined) => Math.round(Number(cell ?? 0) * 100);
       const meta = {

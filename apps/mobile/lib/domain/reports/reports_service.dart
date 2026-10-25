@@ -15,7 +15,6 @@ library;
 
 import 'package:arena_ops/core/time/business_calendar.dart';
 import 'package:arena_ops/domain/entities/customer.dart';
-import 'package:arena_ops/domain/entities/group_session.dart';
 import 'package:arena_ops/domain/entities/payment.dart';
 import 'package:arena_ops/domain/entities/resource.dart';
 import 'package:arena_ops/domain/entities/session.dart';
@@ -30,10 +29,6 @@ class ReportInput {
     required this.segments,
     required this.charges,
     required this.payments,
-    required this.groups,
-    required this.groupAssignments,
-    required this.groupCharges,
-    required this.groupPayments,
     required this.customers,
     required this.resources,
     required this.gameNames,
@@ -46,11 +41,6 @@ class ReportInput {
   final List<SessionSegment> segments;
   final List<SessionCharge> charges;
   final List<Payment> payments;
-
-  final List<GroupSession> groups;
-  final List<GroupAssignment> groupAssignments;
-  final List<GroupCharge> groupCharges;
-  final List<GroupPayment> groupPayments;
 
   final List<Customer> customers;
   final List<Resource> resources;
@@ -78,13 +68,6 @@ class ReportsService {
             !s.actualEndedAt!.isBefore(start) &&
             s.actualEndedAt!.isBefore(end))
         .toList();
-    final endedGroups = input.groups
-        .where((g) =>
-            g.status == GroupSessionStatus.completed &&
-            g.actualEndedAt != null &&
-            !g.actualEndedAt!.isBefore(start) &&
-            g.actualEndedAt!.isBefore(end))
-        .toList();
 
     var billed = 0;
     var waived = 0;
@@ -94,19 +77,10 @@ class ReportsService {
         waived += s.billedAmountPaise ?? 0;
       }
     }
-    for (final g in endedGroups) {
-      billed += g.billedAmountPaise ?? 0;
-      if (g.paymentStatus == PaymentStatus.waived) {
-        waived += g.billedAmountPaise ?? 0;
-      }
-    }
 
     // --- payments in the window → collected ---------------------------------
     final windowPayments =
         input.payments.where((p) => _inWindow(p.createdAt, start, end)).toList();
-    final windowGroupPayments = input.groupPayments
-        .where((p) => _inWindow(p.createdAt, start, end))
-        .toList();
 
     var collected = 0;
     var refunded = 0;
@@ -122,9 +96,6 @@ class ReportsService {
     for (final p in windowPayments) {
       countPayment(p.method, p.amountPaise, p.isRefund);
     }
-    for (final p in windowGroupPayments) {
-      countPayment(p.method, p.amountPaise, p.isRefund);
-    }
 
     // --- segments clipped to the window → time, utilisation, games ----------
     final clipped = <({SessionSegment seg, int minutes})>[];
@@ -132,20 +103,11 @@ class ReportsService {
       final minutes = _clippedMinutes(seg.startedAt, seg.endedAt, start, end);
       if (minutes > 0) clipped.add((seg: seg, minutes: minutes));
     }
-    final clippedGroup = <({GroupAssignment seg, int minutes})>[];
-    for (final a in input.groupAssignments) {
-      final minutes = _clippedMinutes(a.startedAt, a.endedAt, start, end);
-      if (minutes > 0) clippedGroup.add((seg: a, minutes: minutes));
-    }
 
-    final gamingMinutes = clipped.fold<int>(0, (a, c) => a + c.minutes) +
-        clippedGroup.fold<int>(0, (a, c) => a + c.minutes);
+    final gamingMinutes = clipped.fold<int>(0, (a, c) => a + c.minutes);
 
     // --- revenue by activity and by price band ------------------------------
     final windowCharges = input.charges
-        .where((c) => _overlaps(c.segmentStart, c.segmentEnd, start, end))
-        .toList();
-    final windowGroupCharges = input.groupCharges
         .where((c) => _overlaps(c.segmentStart, c.segmentEnd, start, end))
         .toList();
 
@@ -163,9 +125,6 @@ class ReportsService {
     for (final c in windowCharges) {
       countCharge(c.activityCode, c.bandCode, c.amountPaise);
     }
-    for (final c in windowGroupCharges) {
-      countCharge(c.activityCode, c.bandCode, c.amountPaise);
-    }
 
     // --- per-resource utilisation -------------------------------------------
     final openMinutes = _openMinutes(range, input.calendar);
@@ -175,11 +134,6 @@ class ReportsService {
       playedByResource[c.seg.resourceId] =
           (playedByResource[c.seg.resourceId] ?? 0) + c.minutes;
       (sessionsByResource[c.seg.resourceId] ??= {}).add(c.seg.sessionId);
-    }
-    for (final c in clippedGroup) {
-      playedByResource[c.seg.resourceId] =
-          (playedByResource[c.seg.resourceId] ?? 0) + c.minutes;
-      (sessionsByResource[c.seg.resourceId] ??= {}).add(c.seg.groupId);
     }
     final resourceUsage = [
       for (final r in input.resources)
@@ -202,12 +156,6 @@ class ReportsService {
       if (id == null) continue;
       playedByGame[id] = (playedByGame[id] ?? 0) + c.minutes;
       (sessionsByGame[id] ??= {}).add(c.seg.sessionId);
-    }
-    for (final c in clippedGroup) {
-      final id = c.seg.gameId;
-      if (id == null) continue;
-      playedByGame[id] = (playedByGame[id] ?? 0) + c.minutes;
-      (sessionsByGame[id] ??= {}).add(c.seg.groupId);
     }
     final topGames = [
       for (final e in playedByGame.entries)
@@ -232,25 +180,13 @@ class ReportsService {
           daySessions++;
         }
       }
-      for (final g in endedGroups) {
-        if (_inWindow(g.actualEndedAt!, dayStart, dayEnd)) {
-          dayBilled += g.billedAmountPaise ?? 0;
-          daySessions++;
-        }
-      }
       var dayCollected = 0;
       for (final p in windowPayments) {
-        if (_inWindow(p.createdAt, dayStart, dayEnd)) dayCollected += p.amountPaise;
-      }
-      for (final p in windowGroupPayments) {
         if (_inWindow(p.createdAt, dayStart, dayEnd)) dayCollected += p.amountPaise;
       }
       var dayMinutes = 0;
       for (final c in input.segments) {
         dayMinutes += _clippedMinutes(c.startedAt, c.endedAt, dayStart, dayEnd);
-      }
-      for (final a in input.groupAssignments) {
-        dayMinutes += _clippedMinutes(a.startedAt, a.endedAt, dayStart, dayEnd);
       }
       byDay.add(DayTotals(
         day: day,
@@ -267,7 +203,6 @@ class ReportsService {
     };
     final seen = <String>{
       for (final s in endedSessions) s.customerId,
-      for (final g in endedGroups) g.primaryCustomerId,
     };
     final newCustomers = input.customers
         .where((c) => seen.contains(c.id) && _inWindow(c.createdAt, start, end))
@@ -278,17 +213,9 @@ class ReportsService {
     for (final p in input.payments) {
       paidBySession[p.sessionId] = (paidBySession[p.sessionId] ?? 0) + p.amountPaise;
     }
-    final paidByGroup = <String, int>{};
-    for (final p in input.groupPayments) {
-      paidByGroup[p.groupId] = (paidByGroup[p.groupId] ?? 0) + p.amountPaise;
-    }
     final segmentsBySession = <String, List<SessionSegment>>{};
     for (final seg in input.segments) {
       (segmentsBySession[seg.sessionId] ??= []).add(seg);
-    }
-    final assignmentsByGroup = <String, List<GroupAssignment>>{};
-    for (final a in input.groupAssignments) {
-      (assignmentsByGroup[a.groupId] ??= []).add(a);
     }
     final resourceNames = {for (final r in input.resources) r.id: r.name};
 
@@ -306,7 +233,6 @@ class ReportsService {
         billed: s.billedAmountPaise ?? 0,
         collected: paidBySession[s.id] ?? 0,
         status: s.paymentStatus,
-        isGroup: false,
         resourceIds: [for (final seg in segs) seg.resourceId],
         gameIds: [
           for (final seg in segs)
@@ -315,31 +241,6 @@ class ReportsService {
         minutes: segs.fold<int>(
           0,
           (a, seg) => a + _clippedMinutes(seg.startedAt, seg.endedAt, start, end),
-        ),
-        resourceNames: resourceNames,
-        gameNames: input.gameNames,
-      ));
-    }
-    for (final g in endedGroups) {
-      final assigned = [...?assignmentsByGroup[g.id]]
-        ..sort((a, b) => a.index.compareTo(b.index));
-      history.add(_historyRow(
-        id: g.id,
-        name: customerNames[g.primaryCustomerId] ?? 'Guest',
-        startedAt: g.startedAt,
-        endedAt: g.actualEndedAt,
-        billed: g.billedAmountPaise ?? 0,
-        collected: paidByGroup[g.id] ?? 0,
-        status: g.paymentStatus,
-        isGroup: true,
-        resourceIds: [for (final a in assigned) a.resourceId],
-        gameIds: [
-          for (final a in assigned)
-            if (a.gameId != null) a.gameId!,
-        ],
-        minutes: assigned.fold<int>(
-          0,
-          (acc, a) => acc + _clippedMinutes(a.startedAt, a.endedAt, start, end),
         ),
         resourceNames: resourceNames,
         gameNames: input.gameNames,
@@ -359,7 +260,7 @@ class ReportsService {
       collectedPaise: collected,
       waivedPaise: waived,
       refundedPaise: refunded,
-      sessionCount: endedSessions.length + endedGroups.length,
+      sessionCount: endedSessions.length,
       gamingMinutes: gamingMinutes,
       uniqueCustomers: seen.length,
       newCustomers: newCustomers,
@@ -405,7 +306,6 @@ class ReportsService {
     required int billed,
     required int collected,
     required PaymentStatus status,
-    required bool isGroup,
     required List<String> resourceIds,
     required List<String> gameIds,
     required int minutes,
@@ -434,7 +334,6 @@ class ReportsService {
       billedPaise: billed,
       collectedPaise: collected,
       paymentStatus: status,
-      isGroup: isGroup,
     );
   }
 

@@ -29,9 +29,8 @@ Strengths to keep untouched: timestamp-derived timers, immutable pricing snapsho
 
 | Where | Coupling | Action |
 |---|---|---|
-| `session_segments`, `group_assignments` | `controller_count between 1 and 4` | Keep: only used by controller types, null otherwise |
+| `session_segments` | `controller_count between 1 and 4` | Keep: only used by controller types, null otherwise |
 | `billing_policies.vr_unit_rounding` | VR-named, drives every `unit` type | Keep column; relabel "Fixed-block rounding" |
-| `billing_policies.group_billing_mode`, `group_sessions.purchased_controller_count` | Controller-shaped group billing | Keep; groups only exist for controller+game types |
 | `rates.controller_count`, `bookings.controller_requirement` | Price keyed by controller count | Keep; null for other types |
 | `games.platforms` | Free text, defaults to PS5 | Phase 3: choices from the arena's game types |
 | `_pricing_snapshot` default hours | 404's Tue–Sun 14:00–23:00 when `business_hours` unset | Onboarding always writes hours |
@@ -93,7 +92,6 @@ PS5, PC, VR). A turf that later adds a PlayStation picks it from the same catalo
 |---|---|---|
 | `games` | any active type uses games | Games nav, game step, compatibility, top games |
 | `equipment` | any active type uses controllers | Controller board, accessories, controller step |
-| `groups` | existing rule: a type using controllers and games | Group sessions |
 
 Bookings, sessions, pricing, payments, customers, staff and reports are core for every venue.
 Deriving instead of storing flags means the UI can never disagree with the catalog (no "games off"

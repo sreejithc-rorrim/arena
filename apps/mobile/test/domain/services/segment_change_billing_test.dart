@@ -11,10 +11,8 @@
 /// they do not endorse it. Owner decision pending.
 library;
 
-import 'package:arena_ops/domain/entities/group_session.dart';
 import 'package:arena_ops/domain/entities/session.dart';
 import 'package:arena_ops/domain/pricing/billing_policy.dart';
-import 'package:arena_ops/domain/services/group_billing.dart';
 import 'package:arena_ops/domain/services/segment_billing.dart';
 import 'package:arena_ops/domain/value/enums.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -82,32 +80,4 @@ void main() {
     expect(bill(p, lateChange), 14500); // only 58 min at ₹150/h
   });
 
-  test('groups: a player joining splits the system the same way', () {
-    GroupAssignment a(int player, int fromMin) => GroupAssignment(
-          id: 'a$player',
-          groupId: 'g',
-          playerNumber: player,
-          index: 0,
-          resourceId: 'hex',
-          activityCode: 'PS5',
-          controllerCount: 1,
-          startedAt: t0.add(Duration(minutes: fromMin)),
-          endedAt: t0.add(const Duration(hours: 1)),
-          createdAt: t0,
-        );
-    int groupBill(BillingPolicy p) => const GroupBilling()
-        .bill(
-          snapshot: currentSnapshot(policy: p),
-          assignments: [a(1, 0), a(2, 20)],
-          mode: GroupBillingMode.perSystem,
-          purchasedControllerCount: 2,
-          groupStart: t0,
-          openEndAt: t0.add(const Duration(hours: 1)),
-        )
-        .total
-        .value;
-    expect(groupBill(BillingPolicy.defaults), 23700); // exact, as above
-    expect(groupBill(const BillingPolicy(billingUnit: BillingUnit.block30)),
-        7500 + 28000); // each stretch rounded up separately
-  });
 }

@@ -62,8 +62,8 @@ begin
       game_id, controller_count, started_at, created_at)
     values (v_new, p_arena, v_session, v_idx + 1, v_resource, v_act, v_game, v_cc, v_at, v_now);
   v_skipped := _pad_borrow(p_arena, p->'moves', v_resource, 's:' || v_session::text, v_at);
-  perform _pad_allocate(p_arena, p->'allocations', 'single', v_session, null, v_new, null,
-    null, null, v_resource, v_act, v_game, v_at);
+  perform _pad_allocate(p_arena, p->'allocations', v_session, v_new, v_resource, v_act, v_game,
+    v_at);
   update sessions set updated_at = v_now where id = v_session;
   if v_game is not null then
     update games set last_played_at = v_at, updated_at = v_now where id = v_game and arena_id = p_arena;

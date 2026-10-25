@@ -2,7 +2,7 @@
 --
 -- Joins activity, station (or '-'), controller count (or '-'), band, start and end as epoch
 -- microseconds, played and billed minutes, unit minutes, unit price and amount with '|'.
--- op_session_end / op_group_end compare sorted arrays of these keys (device charge rows vs the
+-- op_session_end compares sorted arrays of these keys (device charge rows vs the
 -- server bill's keys from _pr_keys) as multisets; row ids and order are ignored.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._pr_charge_key (

@@ -224,24 +224,6 @@ class LocalBookingRepository implements BookingRepository {
       }
     }
 
-    if (!taken) {
-      // So does a group playing on it, until the group's scheduled end.
-      final assignments = await (_db.select(_db.groupAssignments)
-            ..where((t) => t.resourceId.equals(resourceId) & t.endedAt.isNull()))
-          .get();
-      for (final a in assignments) {
-        final group = await (_db.select(_db.groupSessions)
-              ..where((t) => t.id.equals(a.groupId)))
-            .getSingleOrNull();
-        if (group != null &&
-            a.startedAt.isBefore(end) &&
-            group.scheduledEndAt.isAfter(start)) {
-          taken = true;
-          break;
-        }
-      }
-    }
-
     if (!taken) return;
     final station = await (_db.select(_db.resources)
           ..where((t) => t.id.equals(resourceId)))

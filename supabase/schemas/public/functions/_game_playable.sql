@@ -2,7 +2,7 @@
 --
 -- No-op when p_game is null. Raises 'not_playable' (hint: the game_resources status, or
 -- 'not_installed' when there is no row) unless the status is 'playable'.
--- Used by op_session_start, op_session_reconfigure and _group_assignable.
+-- Used by op_session_start and op_session_reconfigure.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._game_playable (
   p_game     uuid,

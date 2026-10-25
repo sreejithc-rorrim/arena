@@ -175,13 +175,6 @@ String labelFor(String kind, Map<String, dynamic> p) => switch (kind) {
       'payment.record' => '${p['is_refund'] == true ? 'Refund' : 'Payment'} '
           '${Paise(((p['amount_paise'] as num?)?.toInt() ?? 0).abs()).display} '
           '(${p['method']})',
-      'group.create' => 'Start group',
-      'group.add' => 'Add player',
-      'group.switch' => 'Move player',
-      'group.end_player' => 'Player leaves',
-      'group.extend' => 'Extend group +${p['added_minutes']} min',
-      'group.end' => 'End group',
-      'group.void' => 'Void group',
       'controller.move' => 'Move controller',
       'customer.create' => 'New customer ${p['name'] ?? ''}',
       'customer.update' => 'Edit customer',
@@ -223,7 +216,7 @@ String reasonFor(String code) => switch (code) {
       'refund_reason_required' => 'a refund needs a reason',
       'amount_zero' || 'amount_negative' => 'the amount must be more than zero',
       'invalid_method' => 'that payment method is not accepted here',
-      // Sessions and groups.
+      // Sessions.
       'invalid_time' => 'its times were out of order',
       'time_in_future' => 'its time is ahead of the server — check the '
           'tablet\'s date and time',
@@ -234,11 +227,6 @@ String reasonFor(String code) => switch (code) {
       'end_reason_required' => 'an earlier end needs a reason',
       'waive_over_limit' => 'only an owner can waive that much',
       'no_open_segment' => 'the session had already moved or ended on another device',
-      'no_open_assignment' =>
-        'that player had already moved or ended on another device',
-      'no_assignments' => 'a group needs at least one player',
-      'player_busy' => 'that player was already playing elsewhere',
-      'game_conflict' => 'players sharing a station must play the same game',
       'resource_unavailable' => 'that station is out of service',
       'resource_missing' || 'missing_reference' =>
         'a station, game or customer it names no longer exists',

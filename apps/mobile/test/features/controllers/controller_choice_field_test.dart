@@ -1,7 +1,7 @@
 /// The staff controller UI as it is actually used: one control where the count
 /// and the physical pads are the same thing, an estimate that follows them,
 /// explicit borrowing, reasons for unavailable pads, the game limit, active
-/// session changes, switching, and the group one-pad-per-player rule.
+/// session changes and switching.
 library;
 
 import 'package:arena_ops/core/clock/clock.dart';
@@ -16,7 +16,6 @@ import 'package:arena_ops/domain/repositories/commands.dart';
 import 'package:arena_ops/features/controllers/presentation/controller_board_screen.dart';
 import 'package:arena_ops/features/floor/presentation/sheets/change_controllers_sheet.dart';
 import 'package:arena_ops/features/floor/presentation/sheets/switch_system_sheet.dart';
-import 'package:arena_ops/features/group_sessions/presentation/group_session_screen.dart';
 import 'package:arena_ops/features/new_session/presentation/new_session_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -315,55 +314,6 @@ void main() {
       (await LocalSessionRepository(db).active()).single.current.resourceId,
       'void',
     );
-    await disposeApp(tester);
-  });
-
-  testWidgets('group on one system: one pad per player; borrow the third', (
-    tester,
-  ) async {
-    phone(tester);
-    await tester.pumpWidget(
-      host(GroupSessionScreen(initialResource: await station('hex'))),
-    );
-    await settle(tester);
-
-    expect(text(tester, 'pad-selected'), 'Selected: HEX-1, HEX-2');
-    expect(find.textContaining('Picked 2 of 3 controllers'), findsOneWidget);
-    expect(startButton(tester, 'Start group').onPressed, isNull);
-
-    await tapKey(tester, 'pad-ctl_ghost_1');
-    expect(
-      text(tester, 'pad-selected'),
-      'Selected: HEX-1, HEX-2, GHOST-1 (borrow)',
-    );
-    expect(find.textContaining('Picked 2 of 3'), findsNothing);
-    expect(text(tester, 'group-controller-total'), startsWith('3 in total'));
-    await disposeApp(tester);
-  });
-
-  testWidgets('group on separate systems: players sharing HEX get distinct '
-      'pads, settle (no flip-flop), and the third sees the shortfall', (
-    tester,
-  ) async {
-    phone(tester);
-    await tester.pumpWidget(host(const GroupSessionScreen()));
-    await settle(tester);
-    // Each player section has its own HEX chip, in player order.
-    for (var i = 0; i < 3; i++) {
-      await tester.tap(find.widgetWithText(ChoiceChip, 'HEX').at(i));
-      await settle(tester);
-    }
-    String sel(int i) => tester
-        .widget<Text>(find.byKey(const ValueKey('pad-selected')).at(i))
-        .data!;
-    final first = [sel(0), sel(1), sel(2)];
-    expect(first[0], 'Selected: HEX-1');
-    expect(first[1], 'Selected: HEX-2');
-    expect(first[2], 'Selected: none');
-    // Stable across further frames.
-    await settle(tester);
-    expect([sel(0), sel(1), sel(2)], first);
-    expect(find.textContaining('1 requested, 0 selected'), findsOneWidget);
     await disposeApp(tester);
   });
 

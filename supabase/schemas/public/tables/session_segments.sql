@@ -4,8 +4,8 @@
 -- where the player is now. op_session_start inserts idx 0; op_session_reconfigure
 -- (switch station / change game / change controllers) closes the open segment
 -- and inserts idx + 1; op_session_end / op_session_void close it. At most one
--- open segment or group assignment per station: ux_one_open_segment_per_resource
--- plus trigger assert_resource_free_for_segment (which also covers group_assignments).
+-- open segment per station: ux_one_open_segment_per_resource plus trigger
+-- assert_resource_free_for_segment.
 create table "public"."session_segments" (
   "id"               uuid                     not null default gen_random_uuid(),
   "arena_id"         uuid                     not null,
@@ -37,7 +37,7 @@ create table "public"."session_segments" (
     references public.sessions(id) on delete cascade
 );
 
-comment on table public.session_segments is 'One stretch of a single session on one station, activity, game and controller count. The open segment (ended_at null) is where the session is now; at most one open segment or group assignment per station.';
+comment on table public.session_segments is 'One stretch of a single session on one station, activity, game and controller count. The open segment (ended_at null) is where the session is now; at most one open segment per station.';
 
 comment on column public.session_segments.arena_id is 'Owning arena (tenant); RLS shows the row only to active members of this arena.';
 
@@ -67,8 +67,8 @@ create index ix_segments_session on public.session_segments using btree (session
 
 create index ix_session_segments_sync on public.session_segments using btree (arena_id, sync_xid);
 
--- One open segment per station (the cross-table rule with group_assignments is
--- the t_segment_resource_free trigger).
+-- One open segment per station (t_segment_resource_free raises the clearer
+-- resource_busy first).
 create unique index ux_one_open_segment_per_resource on public.session_segments
   using btree (resource_id)
   where (ended_at is null);
@@ -92,7 +92,7 @@ create trigger t_same_arena
     'sessions');
 
 -- Opening a segment locks the station row and raises resource_busy if any other
--- open segment or open group assignment is on it (occupancy spans two tables).
+-- open segment is on it.
 create trigger t_segment_resource_free
   before insert or update of resource_id, ended_at on public.session_segments
   for each row

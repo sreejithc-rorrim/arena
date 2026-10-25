@@ -2,8 +2,8 @@
 --
 -- Row ids are generated on the device. Written by op_customer_create
 -- (customer.create) and op_customer_update (customer.update, refused as 'stale'
--- if the row changed since the device's base_version); op_session_start and
--- op_group_create bump last_visit_at. A phone number is unique within an arena:
+-- if the row changed since the device's base_version); op_session_start
+-- bumps last_visit_at. A phone number is unique within an arena:
 -- on create, a clashing phone is dropped from the new row and logged to audit_log
 -- rather than failing the op. Visit/spend statistics are derived, not stored.
 create table "public"."customers" (
@@ -24,13 +24,13 @@ create table "public"."customers" (
   constraint "customers_pkey" primary key (id)
 );
 
-comment on table public.customers is 'Customers of an arena: registered members and per-visit walk-in guest records. Referenced by sessions, groups and bookings.';
+comment on table public.customers is 'Customers of an arena: registered members and per-visit walk-in guest records. Referenced by sessions and bookings.';
 
 comment on column public.customers.arena_id is 'Owning arena (tenant). RLS limits reads to arenas the caller is an active member of.';
 
 comment on column public.customers.phone is 'Contact number, trimmed; null when unknown. Unique per arena when set (ux_customer_phone).';
 
-comment on column public.customers.last_visit_at is 'Start time of the customer''s latest session or group session (UTC); set by op_session_start / op_group_create.';
+comment on column public.customers.last_visit_at is 'Start time of the customer''s latest session (UTC); set by op_session_start.';
 
 comment on column public.customers.birth_year is 'Year of birth given at registration, for age checks (age ratings); null when not given. Written by customer.create / customer.update only when the key is sent; ops refuse a future year.';
 

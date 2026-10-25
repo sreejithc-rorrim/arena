@@ -26,9 +26,7 @@ create or replace function public._sync_sources()
     ('bookings','sync_v_bookings'), ('sessions','sessions'),
     ('session_segments','session_segments'), ('session_extensions','session_extensions'),
     ('session_charges','session_charges'), ('payments','payments'),
-    ('group_sessions','group_sessions'), ('group_assignments','group_assignments'),
-    ('group_extensions','group_extensions'), ('group_charges','group_charges'),
-    ('group_payments','group_payments'), ('controller_allocations','controller_allocations'),
+    ('controller_allocations','controller_allocations'),
     ('controller_moves','controller_moves'), ('settings','settings'),
     ('accessory_kinds','accessory_kinds'), ('pricing_rules','pricing_rules'),
     ('discounts','discounts'), ('bill_discounts','bill_discounts')

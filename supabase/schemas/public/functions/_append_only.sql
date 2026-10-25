@@ -1,10 +1,9 @@
 -- _append_only() — trigger: money, audit and evidence rows are never edited or deleted
 --
--- BEFORE UPDATE OR DELETE row trigger (t_<table>_append_only) on payments, group_payments,
--- session_charges, group_charges, bill_discounts, audit_log, salary_adjustments,
--- attendance_punches and controller_moves. Corrections are new rows (refunds, reversals,
+-- BEFORE UPDATE OR DELETE row trigger (t_<table>_append_only) on payments, session_charges,
+-- bill_discounts, audit_log and controller_moves. Corrections are new rows (refunds, reversals,
 -- superseding entries), so no op changes these; the trigger makes that hold against a
--- dashboard / SQL-editor delete, a cascade from a deleted session, group or arena, a script or a
+-- dashboard / SQL-editor delete, a cascade from a deleted session or arena, a script or a
 -- future op bug. Raises append_only. An operator who must really remove test data uses
 -- supabase/audit/prod_prerelease_reset.sql, which disables these triggers inside its own
 -- transaction with foreign keys still enforced (docs/DEPLOY_SUPABASE.md, Backups). Never

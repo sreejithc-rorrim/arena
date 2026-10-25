@@ -1,6 +1,6 @@
 -- _untracked_busy(p_arena, p_resource, p_except) — is someone playing at the station with untracked pads?
 --
--- True when an open session segment or group assignment at p_resource (id not in p_except) has a
+-- True when an open session segment at p_resource (id not in p_except) has a
 -- controller-using activity but no open controller_allocations row: its pads may be in hand, so
 -- none can be lent or allocated there. Used by _pad_borrow and _pad_allocate.
 -- Server-only: not executable by anon/authenticated.
@@ -21,14 +21,7 @@ create or replace function public._untracked_busy (
        where s.arena_id = p_arena and s.resource_id = p_resource and s.ended_at is null
          and a.uses_controllers and not (s.id = any(p_except))
          and not exists (select 1 from controller_allocations ca
-                          where ca.segment_id = s.id and ca.ended_at is null))
-    or exists (
-      select 1 from group_assignments g
-        join activities a on a.arena_id = g.arena_id and a.code = g.activity_code
-       where g.arena_id = p_arena and g.resource_id = p_resource and g.ended_at is null
-         and a.uses_controllers and not (g.id = any(p_except))
-         and not exists (select 1 from controller_allocations ca
-                          where ca.assignment_id = g.id and ca.ended_at is null));
+                          where ca.segment_id = s.id and ca.ended_at is null));
 $function$;
 
 comment on function public._untracked_busy(uuid, uuid, uuid[]) is 'True when open play at the station uses controllers without any allocated pads.';

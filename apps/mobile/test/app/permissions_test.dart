@@ -11,7 +11,6 @@ import 'package:arena_ops/data/local/database.dart';
 import 'package:arena_ops/data/local/local_booking_repository.dart';
 import 'package:arena_ops/data/local/local_catalog_repository.dart';
 import 'package:arena_ops/data/local/local_customer_repository.dart';
-import 'package:arena_ops/data/local/local_group_session_repository.dart';
 import 'package:arena_ops/data/local/local_session_repository.dart';
 import 'package:arena_ops/data/local/seed_data.dart';
 import 'package:arena_ops/domain/auth/app_user.dart';
@@ -30,7 +29,6 @@ void main() {
   late AppDatabase db;
   late LocalSessionRepository sessions;
   late LocalCatalogRepository catalog;
-  late LocalGroupSessionRepository groups;
   late Customer walkIn;
 
   final start = ist(2026, 10, 2, 18, 0);
@@ -65,7 +63,6 @@ void main() {
 
   SessionActions actionsFor(AppUser? user) => SessionActions(
         sessions: sessions,
-        groups: groups,
         catalog: catalog,
         bookings: LocalBookingRepository(db, clock),
         clock: clock,
@@ -77,7 +74,6 @@ void main() {
     await LocalSeed.apply(db);
     sessions = LocalSessionRepository(db, clock);
     catalog = LocalCatalogRepository(db);
-    groups = LocalGroupSessionRepository(db, clock);
     walkIn = await LocalCustomerRepository(db, clock).create(name: 'Walk-in');
   });
 

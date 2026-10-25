@@ -1,11 +1,10 @@
 /// The controller lifecycle end to end through the application actions:
 /// inventory-honest starts (4 asked at a 2-pad station), explicit borrowing
 /// with origin/destination history and return, atomic rollback, billing over
-/// the real controller intervals before/after a mid-session change, groups
-/// across several stations, and pre-tracking count-only sessions.
+/// the real controller intervals before/after a mid-session change, and
+/// pre-tracking count-only sessions.
 library;
 
-import 'package:arena_ops/app/controllers/group_session_actions.dart';
 import 'package:arena_ops/app/controllers/session_actions.dart';
 import 'package:arena_ops/core/clock/clock.dart';
 import 'package:arena_ops/data/local/database.dart';
@@ -13,7 +12,6 @@ import 'package:arena_ops/data/local/local_booking_repository.dart';
 import 'package:arena_ops/data/local/local_catalog_repository.dart';
 import 'package:arena_ops/data/local/local_controller_allocation_repository.dart';
 import 'package:arena_ops/data/local/local_customer_repository.dart';
-import 'package:arena_ops/data/local/local_group_session_repository.dart';
 import 'package:arena_ops/data/local/local_session_repository.dart';
 import 'package:arena_ops/data/local/seed_data.dart';
 import 'package:arena_ops/domain/auth/app_user.dart';
@@ -33,11 +31,9 @@ import '../support/pricing_fixtures.dart';
 void main() {
   late AppDatabase db;
   late LocalSessionRepository sessionsRepo;
-  late LocalGroupSessionRepository groupsRepo;
   late LocalCatalogRepository catalog;
   late LocalControllerAllocationRepository alloc;
   late SessionActions single;
-  late GroupSessionActions groups;
   late Customer who;
   late FakeClock clock;
 
@@ -56,21 +52,10 @@ void main() {
     db = AppDatabase(NativeDatabase.memory());
     await LocalSeed.apply(db);
     sessionsRepo = LocalSessionRepository(db, clock);
-    groupsRepo = LocalGroupSessionRepository(db, clock);
     catalog = LocalCatalogRepository(db);
     alloc = LocalControllerAllocationRepository(db, clock);
     final bookings = LocalBookingRepository(db, clock);
     single = SessionActions(
-      sessions: sessionsRepo,
-      groups: groupsRepo,
-      catalog: catalog,
-      bookings: bookings,
-      clock: clock,
-      guard: staff,
-      pads: alloc,
-    );
-    groups = GroupSessionActions(
-      groups: groupsRepo,
       sessions: sessionsRepo,
       catalog: catalog,
       bookings: bookings,
@@ -424,108 +409,6 @@ void main() {
         final one = two.toggle('ctl_hex_2', b);
         final p1 = await single.previewStart(at('hex', one));
         expect(p1.valueOrNull!.quote.amount.value, 15000);
-      },
-    );
-  });
-
-  group('groups across stations', () {
-    test(
-      'estimate sums each system at its own controllers; end releases all',
-      () async {
-        final hb = await board('hex');
-        final vb = await board('void');
-        final d = GroupSessionDraft(
-          primaryCustomerId: who.id,
-          playerCount: 2,
-          purchasedControllerCount: 3,
-          players: [
-            GroupPlayerDraft(
-              playerNumber: 1,
-              resourceId: 'hex',
-              resourceName: 'HEX',
-              activityCode: 'PS5',
-              controllers: ControllerChoice.none.reconcile(hb).request(2, hb),
-            ),
-            GroupPlayerDraft(
-              playerNumber: 2,
-              resourceId: 'void',
-              resourceName: 'VOID',
-              activityCode: 'PS5',
-              controllers: ControllerChoice.none.reconcile(vb).request(1, vb),
-            ),
-          ],
-        );
-        final plan = await groups.previewCreate(d);
-        expect(plan.valueOrNull!.estimate.value, 28000 + 15000);
-        expect(
-          plan.valueOrNull!.lines.map(
-            (l) => '${l.label} ${l.controllerCount} ${l.amount.value}',
-          ),
-          unorderedEquals(['HEX 2 28000', 'VOID 1 15000']),
-        );
-
-        expect((await groups.create(d)).isOk, isTrue);
-        expect(await held(), {'ctl_hex_1', 'ctl_hex_2', 'ctl_void_1'});
-
-        // Player 2 adds a pad halfway: billed per interval.
-        clock.advance(const Duration(minutes: 30));
-        var g = (await groupsRepo.activeGroups()).single;
-        final r = await groups.changeControllers(
-          groupId: g.group.id,
-          current: g.currentForPlayer(2)!,
-          controllers: const ControllerChoice.tracked(
-            requested: 2,
-            padIds: ['ctl_void_1', 'ctl_void_2'],
-          ),
-        );
-        expect(r.isOk, isTrue, reason: r.failureOrNull?.display);
-        clock.advance(const Duration(minutes: 30));
-        g = (await groupsRepo.activeGroups()).single;
-        expect(groups.endSummary(g).total.value, 28000 + 7500 + 14000);
-        expect(g.group.startedAt, start, reason: 'group timer untouched');
-
-        expect((await groups.end(g)).isOk, isTrue);
-        expect(await held(), isEmpty);
-      },
-    );
-
-    test(
-      'a group player can borrow; void releases and keeps history',
-      () async {
-        final vb = await board('void');
-        final c = ControllerChoice.none
-            .reconcile(vb)
-            .request(3, vb)
-            .toggle('ctl_ghost_1', vb);
-        final created = await groups.create(
-          GroupSessionDraft(
-            primaryCustomerId: who.id,
-            playerCount: 1,
-            purchasedControllerCount: 3,
-            players: [
-              GroupPlayerDraft(
-                playerNumber: 1,
-                resourceId: 'void',
-                resourceName: 'VOID',
-                activityCode: 'PS5',
-                controllers: c,
-              ),
-            ],
-          ),
-        );
-        expect(created.isOk, isTrue, reason: created.failureOrNull?.display);
-        final ghost1 = await pad('ctl_ghost_1');
-        expect(ghost1.currentResourceId, 'void');
-        expect(
-          ghost1.loanSessionRef,
-          Controller.groupRef(created.valueOrNull!.id),
-        );
-        expect(
-          (await groupsRepo.voidGroup(created.valueOrNull!.id, 'test')).isOk,
-          isTrue,
-        );
-        expect(await held(), isEmpty);
-        expect(await alloc.movesForController('ctl_ghost_1'), hasLength(1));
       },
     );
   });

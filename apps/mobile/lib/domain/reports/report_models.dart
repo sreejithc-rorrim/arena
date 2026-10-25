@@ -163,7 +163,6 @@ class SessionHistoryRow {
     required this.billedPaise,
     required this.collectedPaise,
     required this.paymentStatus,
-    required this.isGroup,
   });
 
   final String sessionId;
@@ -178,7 +177,6 @@ class SessionHistoryRow {
   final int billedPaise;
   final int collectedPaise;
   final PaymentStatus paymentStatus;
-  final bool isGroup;
 
   int get pendingPaise =>
       paymentStatus == PaymentStatus.waived ? 0 : billedPaise - collectedPaise;

@@ -1,18 +1,16 @@
 /// Pricing rules (server `_pr_rule` / `_pr_rule_price`): which rule applies,
-/// judged once at the session's (group's) start in IST, and how it changes
+/// judged once at the session's start in IST, and how it changes
 /// every unit price of the quote.
 library;
 
 import 'package:arena_ops/core/money/paise.dart';
 import 'package:arena_ops/core/time/ist.dart';
-import 'package:arena_ops/domain/entities/group_session.dart';
 import 'package:arena_ops/domain/entities/session.dart';
 import 'package:arena_ops/domain/pricing/pricing_quote.dart';
 import 'package:arena_ops/domain/pricing/pricing_rule.dart';
 import 'package:arena_ops/domain/pricing/pricing_service.dart';
 import 'package:arena_ops/domain/pricing/pricing_snapshot.dart';
 import 'package:arena_ops/domain/pricing/rule_engine.dart';
-import 'package:arena_ops/domain/services/group_billing.dart';
 import 'package:arena_ops/domain/services/segment_billing.dart';
 import 'package:arena_ops/domain/services/session_planner.dart';
 import 'package:arena_ops/domain/value/enums.dart';
@@ -262,26 +260,6 @@ void main() {
       );
       expect(plan.valueOrNull!.addedCost.value, 12000); // 17:00–18:00 still −20%
     });
-  });
-
-  test('a group judges the rule at the group start for every stretch', () {
-    final snap = currentSnapshot(rules: [afternoonRule()]);
-    final g0 = ist(2026, 10, 2, 16, 45);
-    final late = ist(2026, 10, 2, 17, 30);
-    final bill = const GroupBilling().bill(
-      snapshot: snap,
-      assignments: [
-        GroupAssignment(id: 'a1', groupId: 'g', playerNumber: 1, index: 0, resourceId: 'hex',
-            activityCode: 'PS5', controllerCount: 1, startedAt: late, createdAt: late),
-      ],
-      mode: GroupBillingMode.perSystem,
-      purchasedControllerCount: 1,
-      groupStart: g0,
-      openEndAt: late.add(const Duration(hours: 1)),
-    );
-    expect(bill.charges.single.unitPricePaise, 12000);
-    expect(bill.total.value, 12000);
-    expect(bill.rules.single.id, 'r1');
   });
 
   group('snapshot JSON (server `_pricing_snapshot` shape)', () {

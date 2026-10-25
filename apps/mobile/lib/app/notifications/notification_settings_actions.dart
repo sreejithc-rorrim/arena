@@ -28,7 +28,7 @@ class NotificationSettingsActions {
   final Clock clock;
 
   /// Store [next] for this phone, then rebuild the alerts of every running
-  /// session and group with it: one turned off stops ringing, sound and
+  /// session with it: one turned off stops ringing, sound and
   /// vibration change on those already set. Switching timer alerts on asks
   /// for permission when the phone does not allow notifications yet.
   Future<Result<NotificationSettings>> save(NotificationSettings next) async {

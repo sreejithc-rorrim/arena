@@ -8,7 +8,6 @@ import 'package:arena_ops/data/local/local_booking_repository.dart';
 import 'package:arena_ops/data/local/local_catalog_repository.dart';
 import 'package:arena_ops/data/local/local_controller_allocation_repository.dart';
 import 'package:arena_ops/data/local/local_customer_repository.dart';
-import 'package:arena_ops/data/local/local_group_session_repository.dart';
 import 'package:arena_ops/data/local/local_session_repository.dart';
 import 'package:arena_ops/domain/entities/booking.dart';
 import 'package:arena_ops/domain/repositories/booking_repository.dart';
@@ -16,14 +15,12 @@ import 'package:arena_ops/domain/entities/activity.dart';
 import 'package:arena_ops/domain/entities/controller.dart';
 import 'package:arena_ops/domain/entities/customer.dart';
 import 'package:arena_ops/domain/entities/game.dart';
-import 'package:arena_ops/domain/entities/group_session.dart';
 import 'package:arena_ops/domain/entities/payment.dart';
 import 'package:arena_ops/domain/entities/resource.dart';
 import 'package:arena_ops/domain/entities/session.dart';
 import 'package:arena_ops/domain/pricing/pricing_snapshot.dart';
 import 'package:arena_ops/domain/repositories/catalog_repository.dart';
 import 'package:arena_ops/domain/repositories/customer_repository.dart';
-import 'package:arena_ops/domain/repositories/group_session_repository.dart';
 import 'package:arena_ops/domain/repositories/session_repository.dart';
 import 'package:arena_ops/domain/services/game_compatibility.dart';
 import 'package:arena_ops/domain/services/pad_selection.dart';
@@ -55,14 +52,6 @@ final customerRepositoryProvider = Provider<CustomerRepository>(
   ),
 );
 
-final groupSessionRepositoryProvider = Provider<GroupSessionRepository>(
-  (ref) => LocalGroupSessionRepository(
-    ref.watch(databaseProvider),
-    ref.watch(clockProvider),
-    ref.watch(syncRecorderProvider),
-  ),
-);
-
 final catalogRepositoryProvider = Provider<CatalogRepository>(
   (ref) => LocalCatalogRepository(
     ref.watch(databaseProvider),
@@ -80,7 +69,7 @@ final bookingRepositoryProvider = Provider<BookingRepository>(
 );
 
 /// Owner dashboard view + pad inventory flows (move/borrow, RIFT mode lock).
-/// Allocation itself happens through the session/group repositories.
+/// Allocation itself happens through the session repository.
 final controllerAllocationRepositoryProvider =
     Provider<LocalControllerAllocationRepository>(
   (ref) => LocalControllerAllocationRepository(
@@ -114,18 +103,6 @@ final awaitingPaymentProvider = StreamProvider.autoDispose<List<Session>>(
 /// Open segments drive resource occupancy on the floor (spec §1, §24).
 final openSegmentsProvider = StreamProvider.autoDispose<List<SessionSegment>>(
   (ref) => ref.watch(sessionRepositoryProvider).watchOpenSegments(),
-);
-
-/// Active group sessions (group feature §1), each with their assignments.
-final activeGroupsProvider =
-    StreamProvider.autoDispose<List<ActiveGroupSession>>(
-  (ref) => ref.watch(groupSessionRepositoryProvider).watchActiveGroups(),
-);
-
-/// Open group assignments drive group occupancy on the floor (group §7).
-final openGroupAssignmentsProvider =
-    StreamProvider.autoDispose<List<GroupAssignment>>(
-  (ref) => ref.watch(groupSessionRepositoryProvider).watchOpenAssignments(),
 );
 
 /// The controller inventory, live — marking a pad faulty must show on the

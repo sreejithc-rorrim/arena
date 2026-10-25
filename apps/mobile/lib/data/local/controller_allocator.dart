@@ -4,7 +4,7 @@ import 'package:arena_ops/domain/entities/controller.dart';
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
-/// Thrown inside a session/group transaction when a specific-controller
+/// Thrown inside a session transaction when a specific-controller
 /// allocation cannot proceed. The owning repository catches it and returns
 /// `Err(failure)`, so a blocked allocation rolls the whole operation back.
 class ControllerAllocationException implements Exception {
@@ -12,7 +12,7 @@ class ControllerAllocationException implements Exception {
   final Failure failure;
 }
 
-/// Allocates SPECIFIC physical controllers to a session/group player and keeps
+/// Allocates SPECIFIC physical controllers to a session and keeps
 /// the append-only per-pad timeline (brief §3–§5, §8).
 ///
 /// Every method runs inside the CALLER's transaction, so start / switch / end
@@ -36,17 +36,12 @@ class ControllerAllocator {
   /// Validates and reserves [controllerIds] at [resourceId], inserting one open
   /// allocation row per pad. Throws [ControllerAllocationException] on the first
   /// conflict (unknown / not-usable / not-at-this-station / already-in-use).
-  /// Exactly one of ([sessionId]+[segmentId]) or ([groupId]+[assignmentId]) is
-  /// supplied, identifying what the pad is being used for. Returns the rows it
-  /// inserted (their ids travel to the server with the operation).
+  /// [sessionId]+[segmentId] identify what the pad is being used for. Returns
+  /// the rows it inserted (their ids travel to the server with the operation).
   Future<List<ControllerAllocationRow>> allocate({
-    required String scope, // 'single' | 'group'
+    required String scope, // always 'single'
     String? sessionId,
-    String? groupId,
     String? segmentId,
-    String? assignmentId,
-    int? playerNumber,
-    String? playerLabel,
     required List<String> controllerIds,
     required String resourceId,
     required String resourceName,
@@ -102,9 +97,8 @@ class ControllerAllocator {
         ));
       }
       // Another player on this station without tracked pads (an older
-      // count-only session / group player) may be holding this very pad.
-      if (await _untrackedBusy(resourceId,
-          except: {?segmentId, ?assignmentId})) {
+      // count-only session) may be holding this very pad.
+      if (await _untrackedBusy(resourceId, except: {?segmentId})) {
         throw ControllerAllocationException(Failure(
           message: '${pad.label} may be in use at $resourceName by a '
               'player whose controllers are not tracked.',
@@ -122,11 +116,7 @@ class ControllerAllocator {
               controllerId: id,
               scope: scope,
               sessionId: sessionId,
-              groupId: groupId,
               segmentId: segmentId,
-              assignmentId: assignmentId,
-              playerNumber: playerNumber,
-              playerLabel: playerLabel,
               resourceId: resourceId,
               activityCode: activityCode,
               gameId: gameId,
@@ -248,8 +238,8 @@ class ControllerAllocator {
     return row;
   }
 
-  /// True when [resourceId] hosts an open controller-using segment/assignment
-  /// that holds NO tracked pad — its pads may be in players' hands.
+  /// True when [resourceId] hosts an open controller-using segment that holds
+  /// NO tracked pad — its pads may be in players' hands.
   Future<bool> _untrackedBusy(
     String resourceId, {
     Set<String> except = const {},
@@ -267,17 +257,6 @@ class ControllerAllocator {
       if (!await usesControllers(s.activityCode)) continue;
       final held = await (_db.select(_db.controllerAllocations)
             ..where((t) => t.segmentId.equals(s.id) & t.endedAt.isNull()))
-          .get();
-      if (held.isEmpty) return true;
-    }
-    final assigns = await (_db.select(_db.groupAssignments)
-          ..where((t) => t.resourceId.equals(resourceId) & t.endedAt.isNull()))
-        .get();
-    for (final a in assigns) {
-      if (except.contains(a.id)) continue;
-      if (!await usesControllers(a.activityCode)) continue;
-      final held = await (_db.select(_db.controllerAllocations)
-            ..where((t) => t.assignmentId.equals(a.id) & t.endedAt.isNull()))
           .get();
       if (held.isEmpty) return true;
     }
@@ -313,22 +292,9 @@ class ControllerAllocator {
             ..where((t) => t.segmentId.equals(segmentId) & t.endedAt.isNull()))
           .write(ControllerAllocationsCompanion(endedAt: Value(at)));
 
-  /// End-date every open allocation tied to a group assignment, at [at].
-  Future<void> closeForAssignment(String assignmentId, DateTime at) =>
-      (_db.update(_db.controllerAllocations)
-            ..where((t) =>
-                t.assignmentId.equals(assignmentId) & t.endedAt.isNull()))
-          .write(ControllerAllocationsCompanion(endedAt: Value(at)));
-
   /// End-date every open allocation for a whole single session, at [at].
   Future<void> closeForSession(String sessionId, DateTime at) =>
       (_db.update(_db.controllerAllocations)
             ..where((t) => t.sessionId.equals(sessionId) & t.endedAt.isNull()))
-          .write(ControllerAllocationsCompanion(endedAt: Value(at)));
-
-  /// End-date every open allocation for a whole group, at [at].
-  Future<void> closeForGroup(String groupId, DateTime at) =>
-      (_db.update(_db.controllerAllocations)
-            ..where((t) => t.groupId.equals(groupId) & t.endedAt.isNull()))
           .write(ControllerAllocationsCompanion(endedAt: Value(at)));
 }

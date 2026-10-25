@@ -12,8 +12,6 @@ import { DetailRow } from '../../../shared/list-detail/detail-row';
 import { DetailSection } from '../../../shared/list-detail/detail-section';
 import { formatDayYear } from '../../../shared/staff/staff-format';
 import { formatIsoDate, formatTime } from '../../../shared/time/ist';
-import { PaySetupStore } from '../../pay-setup/data/pay-setup-store';
-import { PayStaff } from '../../pay-setup/data/pay-setup.models';
 import { TermsStore } from '../../settings/data/staff-terms';
 import {
   BLOOD_GROUPS,
@@ -24,6 +22,8 @@ import {
   detailsProblems,
   sameDetails,
 } from '../data/personal-details';
+import { TeamStore } from '../data/team-store';
+import { TeamMember } from '../data/team.models';
 
 /** "5 Oct 2026, 9:42 pm" (IST). */
 function dateTime(at: string): string {
@@ -291,12 +291,12 @@ function dateTime(at: string): string {
 export class MemberProfile {
   protected readonly store = inject(PersonalDetailsStore);
   private readonly terms = inject(TermsStore);
-  private readonly pay = inject(PaySetupStore);
+  private readonly team = inject(TeamStore);
   private readonly arena = inject(ArenaContext);
   private readonly snack = inject(MatSnackBar);
   protected readonly today = formatIsoDate(inject(Clock).now());
 
-  readonly staff = input.required<PayStaff>();
+  readonly staff = input.required<TeamMember>();
   /** Owner level (role owner, or money / reports): never asked to accept the terms. */
   readonly exempt = input(false);
 
@@ -336,7 +336,7 @@ export class MemberProfile {
   protected readonly updated = computed(() => {
     const r = this.row();
     if (!r) return '';
-    const by = r.updatedBy ? this.pay.nameOfUser().get(r.updatedBy) : undefined;
+    const by = r.updatedBy ? this.team.nameOfUser().get(r.updatedBy) : undefined;
     return by ? `${dateTime(r.updatedAt)} by ${by}` : dateTime(r.updatedAt);
   });
 

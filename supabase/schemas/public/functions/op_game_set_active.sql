@@ -2,7 +2,7 @@
 --
 -- Permission: settings.
 -- Payload: id, active (true or false).
--- An archived game is hidden from new sessions, bookings and group placements on every device;
+-- An archived game is hidden from new sessions and bookings on every device;
 -- sessions already playing it keep running, and past bills and bookings keep showing it. The
 -- server does not refuse a start on an archived game: a device that was offline when it was
 -- archived may already have started one, and refusing would drop a real session from its floor.

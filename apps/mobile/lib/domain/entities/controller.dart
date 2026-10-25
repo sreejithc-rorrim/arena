@@ -96,7 +96,7 @@ abstract class Controller with _$Controller {
     /// Set while on loan: the station to return it to.
     String? loanReturnTo,
 
-    /// Which session owes the return, as `s:<sessionId>` or `g:<groupId>`.
+    /// Which session owes the return, as `s:<sessionId>`.
     String? loanSessionRef,
 
     required DateTime updatedAt,
@@ -110,7 +110,4 @@ abstract class Controller with _$Controller {
 
   /// A loan reference for a single session.
   static String sessionRef(String sessionId) => 's:$sessionId';
-
-  /// A loan reference for a group session.
-  static String groupRef(String groupId) => 'g:$groupId';
 }

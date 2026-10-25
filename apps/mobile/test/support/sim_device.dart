@@ -12,7 +12,6 @@ import 'package:arena_ops/data/local/local_booking_repository.dart';
 import 'package:arena_ops/data/local/local_catalog_repository.dart';
 import 'package:arena_ops/data/local/local_controller_allocation_repository.dart';
 import 'package:arena_ops/data/local/local_customer_repository.dart';
-import 'package:arena_ops/data/local/local_group_session_repository.dart';
 import 'package:arena_ops/data/local/local_session_repository.dart';
 import 'package:arena_ops/data/sync/sync_engine.dart';
 import 'package:arena_ops/data/sync/sync_recorder.dart';
@@ -34,7 +33,6 @@ class SimDevice {
 
   late final SyncRecorder recorder;
   late final LocalSessionRepository sessions;
-  late final LocalGroupSessionRepository groups;
   late final LocalCustomerRepository customers;
   late final LocalCatalogRepository catalog;
   late final LocalBookingRepository bookings;
@@ -67,7 +65,6 @@ class SimDevice {
       {SyncTransport? via, void Function(List<String> appliedKinds)? onPushed}) {
     recorder = SyncRecorder(db, actor: () => userId, clock: clock);
     sessions = LocalSessionRepository(db, clock, recorder);
-    groups = LocalGroupSessionRepository(db, clock, recorder);
     customers = LocalCustomerRepository(db, clock, recorder);
     catalog = LocalCatalogRepository(db, clock, recorder);
     bookings = LocalBookingRepository(db, clock, recorder);

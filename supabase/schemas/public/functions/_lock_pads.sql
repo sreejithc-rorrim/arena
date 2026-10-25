@@ -2,7 +2,7 @@
 --
 -- SELECT ... ORDER BY id FOR UPDATE on the arena's controllers. Callers lock stations first
 -- (_lock_resources), then pads; the fixed order prevents deadlocks between concurrent ops.
--- Used by _group_lock, op_session_start, op_session_reconfigure and op_controller_move.
+-- Used by op_session_start, op_session_reconfigure and op_controller_move.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._lock_pads (
   p_arena uuid,

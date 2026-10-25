@@ -191,8 +191,9 @@ const DIRECTIONS: readonly { key: Draft['direction']; label: string }[] = [
             <mat-chip-option [value]="+w.key">{{ w.short }}</mat-chip-option>
           }
         </mat-chip-listbox>
-        <div class="flex flex-wrap gap-3">
-          <mat-form-field class="w-36">
+        <!-- items-start: a hint under one field must not stretch the other one's box. -->
+        <div class="flex flex-wrap items-start gap-3">
+          <mat-form-field class="w-44">
             <mat-label>From</mat-label>
             <input
               matInput
@@ -201,7 +202,7 @@ const DIRECTIONS: readonly { key: Draft['direction']; label: string }[] = [
               (input)="set({ from: $any($event.target).value })"
             />
           </mat-form-field>
-          <mat-form-field class="w-36">
+          <mat-form-field class="w-44">
             <mat-label>To</mat-label>
             <input
               matInput
@@ -220,7 +221,7 @@ const DIRECTIONS: readonly { key: Draft['direction']; label: string }[] = [
             }
           </mat-select>
         </mat-form-field>
-        <div class="flex flex-wrap gap-3">
+        <div class="flex flex-wrap items-start gap-3">
           <mat-form-field class="w-44">
             <mat-label>Starts</mat-label>
             <input

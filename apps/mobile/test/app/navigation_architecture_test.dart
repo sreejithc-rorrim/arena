@@ -1,12 +1,9 @@
 import 'package:arena_ops/app/auth/auth_controller.dart';
-import 'package:arena_ops/app/providers/attendance_providers.dart';
 import 'package:arena_ops/data/local/database.dart';
 import 'package:arena_ops/data/local/local_catalog_repository.dart';
 import 'package:arena_ops/data/local/local_customer_repository.dart';
 import 'package:arena_ops/data/local/local_session_repository.dart';
 import 'package:arena_ops/domain/repositories/commands.dart';
-import 'package:arena_ops/features/attendance/presentation/attendance_screen.dart';
-import 'package:arena_ops/features/attendance/presentation/widgets/attendance_chip.dart';
 import 'package:arena_ops/features/controllers/presentation/controller_board_screen.dart';
 import 'package:arena_ops/features/floor/presentation/floor_screen.dart';
 import 'package:arena_ops/features/floor/presentation/station_detail_screen.dart';
@@ -19,16 +16,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../support/fake_attendance.dart';
 import '../support/test_db.dart';
 
 void main() {
   late AppDatabase db;
-  late FakeAttendanceRepository fakeAttendance;
 
   setUp(() async {
     db = await seededMemoryDb();
-    fakeAttendance = FakeAttendanceRepository(serverNow: DateTime.now);
   });
 
   tearDown(() async => db.close());
@@ -36,8 +30,6 @@ void main() {
   Widget app({AuthController Function()? auth}) => ProviderScope(
         overrides: [
           ...testOverrides(db, auth: auth),
-          attendanceAvailableProvider.overrideWithValue(true),
-          attendanceRepositoryProvider.overrideWithValue(fakeAttendance),
         ],
         child: const ArenaOpsApp(),
       );
@@ -87,7 +79,7 @@ void main() {
       await settle(tester);
 
       expect(find.byType(NavigationBar), findsOneWidget);
-      expect(find.text('Today'), findsOneWidget);
+      expect(find.byType(FloorScreen), findsOneWidget);
 
       await tester.tap(find.text('Floor'));
       await settle(tester);
@@ -95,14 +87,6 @@ void main() {
       expect(find.byType(FloorScreen), findsOneWidget);
 
       await tester.tap(find.text('Bookings'));
-      await settle(tester);
-      expect(find.byType(NavigationBar), findsOneWidget);
-
-      await tester.tap(find.text('Money'));
-      await settle(tester);
-      expect(find.byType(NavigationBar), findsOneWidget);
-
-      await tester.tap(find.text('Reports'));
       await settle(tester);
       expect(find.byType(NavigationBar), findsOneWidget);
 
@@ -124,11 +108,6 @@ void main() {
 
       // Tap FAB "New Session"
       await tester.tap(find.byType(FloatingActionButton));
-      await settle(tester);
-
-      // On bottom sheet, tap "Single session"
-      expect(find.text('Single session'), findsOneWidget);
-      await tester.tap(find.text('Single session'));
       await settle(tester);
 
       // NewSessionScreen is full-screen outside AppShell.
@@ -203,57 +182,6 @@ void main() {
 
       expect(find.byType(StationDetailScreen), findsNothing);
       expect(find.byType(FloorScreen), findsOneWidget);
-      expect(find.byType(NavigationBar), findsOneWidget);
-
-      await disposeApp(tester);
-    });
-
-    testWidgets(
-        'AttendanceScreen from Floor header chip hides bottom navigation and returns to Floor',
-        (tester) async {
-      await tester.pumpWidget(app());
-      await settle(tester);
-
-      await tester.tap(find.text('Floor'));
-      await settle(tester);
-
-      // Tap AttendanceChip in the header.
-      expect(find.byType(AttendanceChip), findsOneWidget);
-      await tester.tap(find.byType(AttendanceChip));
-      await settle(tester);
-
-      expectFullScreen(tester, AttendanceScreen);
-
-      // Pop back to Floor.
-      await tester.tap(find.byType(BackButton));
-      await settle(tester);
-
-      expect(find.byType(AttendanceScreen), findsNothing);
-      expect(find.byType(FloorScreen), findsOneWidget);
-      expect(find.byType(NavigationBar), findsOneWidget);
-
-      await disposeApp(tester);
-    });
-
-    testWidgets(
-        'AttendanceScreen from More tab hides bottom navigation and returns to More',
-        (tester) async {
-      await tester.pumpWidget(app());
-      await settle(tester);
-
-      await tester.tap(find.text('More'));
-      await settle(tester);
-
-      await tester.tap(find.text('Attendance'));
-      await settle(tester);
-
-      expectFullScreen(tester, AttendanceScreen);
-
-      await tester.tap(find.byType(BackButton));
-      await settle(tester);
-
-      expect(find.byType(AttendanceScreen), findsNothing);
-      expect(find.text('Attendance'), findsOneWidget);
       expect(find.byType(NavigationBar), findsOneWidget);
 
       await disposeApp(tester);

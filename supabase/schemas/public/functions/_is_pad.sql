@@ -3,7 +3,7 @@
 -- True for no kind (accessories from before kinds existed) or a kind with
 -- counts_as_controller. Only pads are allocated to players, counted for
 -- controller-count supply and borrowed by session starts. Used by
--- _inventory_tracked, _usable_pads_at, _free_pads_at, _pad_allocate and _pad_borrow.
+-- _inventory_tracked, _free_pads_at, _pad_allocate and _pad_borrow.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._is_pad (
   p_kind uuid

@@ -1,9 +1,9 @@
--- _discount_apply(p_arena, p_disc, p_bill, p_at, p_session, p_group) — apply one discount to a bill.
+-- _discount_apply(p_arena, p_disc, p_bill, p_at, p_session) — apply one discount to a session's bill.
 --
--- p_disc is the `discount` of a session.end / group.end payload:
+-- p_disc is the `discount` of a session.end payload:
 --   {id?, discount_id? | code? | manual: {value_kind, value}, reason?, amount_paise}.
--- p_bill is the server's bill (_pr_session_bill / _pr_group_bill: subtotal, by_activity); p_at the
--- bill's end instant, at which validity is judged. Exactly one of p_session / p_group is set.
+-- p_bill is the server's bill (_pr_session_bill: subtotal, by_activity); p_at the
+-- bill's end instant, at which validity is judged; p_session the session billed.
 -- Preset / coupon: must be active (discount_inactive), inside [valid_from, valid_until]
 -- (discount_not_started / coupon_expired), under max_uses counting non-voided bills
 -- (coupon_used_up), on a subtotal ≥ min_bill_paise (discount_min_bill) and on a bill with charges of
@@ -14,15 +14,14 @@
 -- Amount: percent = round-half-up(base × value / 100) capped by max_discount_paise; flat = value;
 -- never above base, where base = the subtotal of the in-scope types (whole subtotal when unscoped).
 -- The device's amount_paise must equal it (price_mismatch, hint discount). Inserts the
--- bill_discounts row and returns the amount. Used by op_session_end and op_group_end.
+-- bill_discounts row and returns the amount. Used by op_session_end.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._discount_apply (
   p_arena   uuid,
   p_disc    jsonb,
   p_bill    jsonb,
   p_at      timestamp with time zone,
-  p_session uuid,
-  p_group   uuid
+  p_session uuid
 )
   returns bigint
   language plpgsql
@@ -66,9 +65,8 @@ begin
     end if;
     if v_d.max_uses is not null then
       select count(*) into v_uses from bill_discounts b
-        left join sessions s on s.id = b.session_id
-        left join group_sessions g on g.id = b.group_id
-       where b.discount_id = v_d.id and coalesce(s.status, g.status) <> 'voided';
+        join sessions s on s.id = b.session_id
+       where b.discount_id = v_d.id and s.status <> 'voided';
       if v_uses >= v_d.max_uses then raise exception 'coupon_used_up'; end if;
     end if;
     if v_d.min_bill_paise is not null and v_sub < v_d.min_bill_paise then
@@ -105,24 +103,24 @@ begin
     perform _price_mismatch('discount', v_amount, (p_disc->>'amount_paise')::bigint);
   end if;
 
-  insert into bill_discounts(id, arena_id, session_id, group_id, discount_id, source, name, code,
+  insert into bill_discounts(id, arena_id, session_id, discount_id, source, name, code,
       value_kind, value, base_paise, amount_paise, reason, applied_by, applied_at)
-    values (coalesce(nullif(p_disc->>'id', '')::uuid, gen_random_uuid()), p_arena, p_session, p_group,
+    values (coalesce(nullif(p_disc->>'id', '')::uuid, gen_random_uuid()), p_arena, p_session,
       v_d.id, v_source, v_name, v_code, v_vkind, v_value, v_base, v_amount, v_reason, auth.uid(), p_at);
   return v_amount;
 end;
 $function$;
 
-comment on function public._discount_apply(uuid, jsonb, jsonb, timestamp with time zone, uuid, uuid) is 'Validates a preset, coupon or manual discount against a bill, records it in bill_discounts and returns the paise taken off.';
+comment on function public._discount_apply(uuid, jsonb, jsonb, timestamp with time zone, uuid) is 'Validates a preset, coupon or manual discount against a bill, records it in bill_discounts and returns the paise taken off.';
 
 grant execute
-  on function "public"."_discount_apply"(uuid, jsonb, jsonb, timestamp with time zone, uuid, uuid)
+  on function "public"."_discount_apply"(uuid, jsonb, jsonb, timestamp with time zone, uuid)
   to "postgres", "service_role";
 
 revoke all
-  on function "public"."_discount_apply"(uuid, jsonb, jsonb, timestamp with time zone, uuid, uuid)
+  on function "public"."_discount_apply"(uuid, jsonb, jsonb, timestamp with time zone, uuid)
   from public;
 
-revoke all on function "public"._discount_apply(p_arena uuid, p_disc jsonb, p_bill jsonb, p_at timestamp with time zone, p_session uuid, p_group uuid) from anon;
+revoke all on function "public"._discount_apply(p_arena uuid, p_disc jsonb, p_bill jsonb, p_at timestamp with time zone, p_session uuid) from anon;
 
-revoke all on function "public"._discount_apply(p_arena uuid, p_disc jsonb, p_bill jsonb, p_at timestamp with time zone, p_session uuid, p_group uuid) from authenticated;
+revoke all on function "public"._discount_apply(p_arena uuid, p_disc jsonb, p_bill jsonb, p_at timestamp with time zone, p_session uuid) from authenticated;

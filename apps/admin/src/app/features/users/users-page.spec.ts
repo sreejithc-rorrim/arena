@@ -14,15 +14,15 @@ describe('Users › Team and Owners & access', () => {
   let api: SampleUsersApi;
 
   /**
-   * Opens `url` on the sample APIs, with the Team list (staff_profiles, read by PaySetupStore)
+   * Opens `url` on the sample APIs, with the Team list (staff_profiles, read by TeamStore)
    * matching the sample logins: s0 Arjun Mehra (owner), s1 Priya Nair, s2 Rohan Das, s3 Kavya
-   * Iyer — the same staff ids the sample shifts use.
+   * Iyer.
    */
-  async function start(url: string, width = 1440, ownerWorksHere = false) {
+  async function start(url: string, width = 1440) {
     api = new SampleUsersApi();
     TestBed.configureTestingModule({ providers: [{ provide: UsersApi, useValue: api }] });
-    t = await startPage(url, width, ({ paySetup }) => {
-      paySetup.staff = sampleUsers().map((u, i) => ({
+    t = await startPage(url, width, ({ team }) => {
+      team.staff = sampleUsers().map((u, i) => ({
         id: `s${i}`,
         userId: u.userId,
         name: u.name,
@@ -30,19 +30,6 @@ describe('Users › Team and Owners & access', () => {
         active: u.active,
         createdAt: '2026-01-05T06:00:00Z',
       }));
-      paySetup.profiles = ownerWorksHere
-        ? [
-            {
-              staffId: 's0',
-              joinedOn: '2024-01-01',
-              leftOn: null,
-              tracksAttendance: true,
-              employeeCode: null,
-              paidLeaveDays: null,
-              standardDayMin: null,
-            },
-          ]
-        : [];
     });
   }
 
@@ -57,10 +44,6 @@ describe('Users › Team and Owners & access', () => {
   const toggles = () =>
     [...(access()?.querySelectorAll('mat-slide-toggle button') ?? [])] as HTMLButtonElement[];
   const dialog = () => t.dialog() as HTMLElement;
-  const tabLabels = () =>
-    [...(detail()?.querySelectorAll('nav[aria-label="Employee sections"] a') ?? [])].map((a) =>
-      t.text(a),
-    );
 
   /** Becomes an owner-level member who is not an owner (role staff, every permission). */
   async function notAnOwner() {
@@ -82,9 +65,9 @@ describe('Users › Team and Owners & access', () => {
     expect(t.url()).toBe('/staff/team');
     // Owners are not employees: only the staff are on Team.
     expect(employees().map(t.rowText)).toEqual([
-      ['Kavya Iyer', 'Staff · No shift'],
-      ['Priya Nair', 'Staff · Morning'],
-      ['Rohan Das', 'Staff · Night'],
+      ['Kavya Iyer', 'Staff'],
+      ['Priya Nair', 'Staff'],
+      ['Rohan Das', 'Staff'],
     ]);
 
     await t.harness.navigateByUrl('/settings/owners');
@@ -99,7 +82,7 @@ describe('Users › Team and Owners & access', () => {
     await start('/staff/team');
     expect(detail()).toBeNull();
     expect(doc().body.textContent).toContain(
-      'Pick someone to see their attendance, leave, salary and schedule',
+      'Pick someone to see their details and access',
     );
     employees()[1].click();
     await t.settle();
@@ -129,74 +112,23 @@ describe('Users › Team and Owners & access', () => {
       'false',
       'false',
       'false',
-      'false',
-      'false',
     ]);
     toggles()[2].click(); // Give discounts
     await t.settle();
     expect(api.users.find((u) => u.userId === 'u2')?.perms).toEqual(['start', 'bill', 'discount']);
   });
 
-  it('Review attendance is a toggle a Settings holder grants', async () => {
-    await start('/staff/team/s2/access');
-    expect(access()?.textContent).toContain('Review attendance');
-    expect(access()?.textContent).toContain(
-      'See everyone’s clock-ins, the location log and flagged entries',
-    );
-    toggles()[4].click();
-    await t.settle();
-    expect(api.users.find((u) => u.userId === 'u2')?.perms).toEqual([
-      'start',
-      'bill',
-      'attendance_review',
-    ]);
-  });
-
-  it('Approve leave, Payroll and Finalise salary are toggles too; an owner grants payroll', async () => {
-    await start('/staff/team/s2/access');
-    const text = access()!.textContent ?? '';
-    expect(text).toContain('Approve leave');
-    expect(text).toContain('Payroll');
-    expect(text).toContain('Pay setup and salary drafts');
-    expect(text).toContain('Finalise salary');
-    expect(text).not.toContain('Only an owner can give or take away Payroll');
-    expect(
-      toggles()
-        .slice(5)
-        .map((b) => b.disabled),
-    ).toEqual([false, false, false]);
-    toggles()[5].click(); // Approve leave
-    await t.settle();
-    toggles()[6].click(); // Payroll
-    await t.settle();
-    expect(api.users.find((u) => u.userId === 'u2')?.perms).toEqual([
-      'start',
-      'bill',
-      'leave_approve',
-      'payroll',
-    ]);
-  });
-
-  it('only an owner may switch Payroll and Finalise salary', async () => {
+  it('only an owner may switch Edit own bills and Add missed bills', async () => {
     await start('/staff/team/s2/access');
     await notAnOwner();
     expect(access()!.textContent).toContain(
-      'Only an owner can give or take away Payroll and Finalise salary.',
+      'Only an owner can give or take away Edit own bills and Add missed bills.',
     );
-    // Floor ones, Review attendance and Approve leave stay a Settings holder's to change.
-    expect(toggles().map((b) => b.disabled)).toEqual([
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      true,
-      true,
-    ]);
+    // The floor ones stay a Settings holder's to change.
+    expect(toggles().map((b) => b.disabled)).toEqual([false, false, false, false, true, true]);
   });
 
-  it('none of the staff-module permissions is in the invite default', async () => {
+  it('neither bill permission is in the invite default', async () => {
     const { DEFAULT_STAFF_PERMS } = await import('./data/user.models');
     expect(DEFAULT_STAFF_PERMS).toEqual(['start', 'bill', 'members']);
   });
@@ -206,11 +138,7 @@ describe('Users › Team and Owners & access', () => {
     expect(t.text(owners())).toContain('Arjun Mehra');
     expect(access()).toBeNull();
     expect(t.text(owners())).not.toContain('Start sessions');
-    // The only switch is "Works here as staff" (their HR profile), never a permission.
-    const switches = [...owners()!.querySelectorAll('app-toggle-row')].map((r) =>
-      t.text(r.querySelector('span span')),
-    );
-    expect(switches).toEqual(['Works here as staff']);
+    expect(owners()!.querySelectorAll('app-toggle-row').length).toBe(0);
     // Not an employee: not on Team, and their Team link opens nothing.
     await t.harness.navigateByUrl('/staff/team/s0');
     await t.settle();
@@ -236,18 +164,6 @@ describe('Users › Team and Owners & access', () => {
     expect(t.snack()).toBe("Kavya Iyer's access turned off");
     expect(access()?.textContent).toContain('Turned off: they cannot sign in to this venue.');
     expect(t.button('Turn access back on', access()!)).toBeDefined();
-  });
-
-  it('an owner who works here can be renamed but has no access to turn off or toggles', async () => {
-    await start('/staff/team/s0', 1440, true);
-    expect(t.text(detail()?.querySelector('h2'))).toBe('Arjun Mehra');
-    expect(t.button('Edit name', detail()!)).toBeDefined();
-    // Owners' access is every permission, managed in Settings › Owners & access.
-    expect(tabLabels()).not.toContain('Access');
-    await t.harness.navigateByUrl('/staff/team/s0/access');
-    await t.settle();
-    expect(access()).toBeNull();
-    expect(t.button('Turn off access', detail()!)).toBeUndefined();
   });
 
   it('add staff: checks the fields and e-mails a staff invitation, no password', async () => {
@@ -371,8 +287,6 @@ describe('Users › Team and Owners & access', () => {
     expect(toggles().map((b) => b.getAttribute('aria-checked'))).toEqual([
       'true',
       'true',
-      'false',
-      'false',
       'false',
       'false',
       'false',

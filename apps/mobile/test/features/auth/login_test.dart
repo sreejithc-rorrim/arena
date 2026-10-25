@@ -54,9 +54,10 @@ void main() {
     }
     await settle(tester);
 
-    // Signed in as owner → lands on Today with all six tabs.
-    expect(find.text('Takings today'), findsOneWidget);
-    expect(find.byType(NavigationDestination), findsNWidgets(6));
+    // Signed in as owner → lands on the Floor too (owner work is on the
+    // admin web).
+    expect(find.text('New Session'), findsWidgets);
+    expect(find.byType(NavigationDestination), findsNWidgets(3));
 
     await disposeApp(tester);
   });

@@ -38,11 +38,6 @@ begin
       join sessions s on s.id = ch.session_id
      where ch.arena_id = p_arena and s.status <> 'voided'
        and ch.segment_start >= p_since and ch.segment_start < p_to
-    union all
-    select ch.resource_id, ch.segment_start, ch.amount_paise from group_charges ch
-      join group_sessions g on g.id = ch.group_id
-     where ch.arena_id = p_arena and g.status <> 'voided'
-       and ch.segment_start >= p_since and ch.segment_start < p_to
   ), pl as (
     select * from _plays(p_arena, p_since)
   )

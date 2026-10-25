@@ -3,7 +3,7 @@
 -- Passes when _pricing_canon(s) equals the canon of _pricing_snapshot(p_arena), or of a list in
 -- pricing_catalog_history retired within _pricing_grace() (looked up by canon_md5, then canon).
 -- Otherwise, or when s is null / not an object, raises 'pricing_snapshot_mismatch'.
--- Called after the op body by op_session_start and op_group_create, so earlier refusals keep their codes.
+-- Called after the op body by op_session_start, so earlier refusals keep their codes.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._assert_snapshot (
   p_arena uuid,

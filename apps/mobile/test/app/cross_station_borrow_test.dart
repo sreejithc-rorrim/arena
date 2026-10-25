@@ -5,12 +5,11 @@
 ///  Staff borrow genuinely free pads from GHOST / RIFT and start at VOID.
 ///
 /// Station availability and pad availability are separate questions; these
-/// tests pin both, plus count-only sessions, groups, a venue with no free
-/// pads, and ending / returning borrowed pads.
+/// tests pin both, plus count-only sessions, a venue with no free pads, and
+/// ending / returning borrowed pads.
 library;
 
 import 'package:arena_ops/app/controllers/booking_actions.dart';
-import 'package:arena_ops/app/controllers/group_session_actions.dart';
 import 'package:arena_ops/app/controllers/session_actions.dart';
 import 'package:arena_ops/core/clock/clock.dart';
 import 'package:arena_ops/data/local/database.dart';
@@ -18,7 +17,6 @@ import 'package:arena_ops/data/local/local_booking_repository.dart';
 import 'package:arena_ops/data/local/local_catalog_repository.dart';
 import 'package:arena_ops/data/local/local_controller_allocation_repository.dart';
 import 'package:arena_ops/data/local/local_customer_repository.dart';
-import 'package:arena_ops/data/local/local_group_session_repository.dart';
 import 'package:arena_ops/data/local/local_session_repository.dart';
 import 'package:arena_ops/data/local/seed_data.dart';
 import 'package:arena_ops/domain/auth/app_user.dart';
@@ -37,11 +35,9 @@ void main() {
   late AppDatabase db;
   late FakeClock clock;
   late LocalSessionRepository sessionsRepo;
-  late LocalGroupSessionRepository groupsRepo;
   late LocalCatalogRepository catalog;
   late LocalControllerAllocationRepository alloc;
   late SessionActions single;
-  late GroupSessionActions groups;
   late BookingActions bookings;
   late String who;
 
@@ -60,21 +56,10 @@ void main() {
     db = AppDatabase(NativeDatabase.memory());
     await LocalSeed.apply(db);
     sessionsRepo = LocalSessionRepository(db, clock);
-    groupsRepo = LocalGroupSessionRepository(db, clock);
     catalog = LocalCatalogRepository(db);
     alloc = LocalControllerAllocationRepository(db, clock);
     final bookingsRepo = LocalBookingRepository(db, clock);
     single = SessionActions(
-      sessions: sessionsRepo,
-      groups: groupsRepo,
-      catalog: catalog,
-      bookings: bookingsRepo,
-      clock: clock,
-      guard: staff,
-      pads: alloc,
-    );
-    groups = GroupSessionActions(
-      groups: groupsRepo,
       sessions: sessionsRepo,
       catalog: catalog,
       bookings: bookingsRepo,
@@ -88,7 +73,6 @@ void main() {
       catalog: catalog,
       clock: clock,
       guard: staff,
-      groups: groupsRepo,
       boards: single.boards,
     );
     who = (await LocalCustomerRepository(db, clock).create(name: 'Arjun')).id;
@@ -363,108 +347,6 @@ void main() {
       expect(direct.failureOrNull?.code, 'controller_taken');
       expect((await pad('ctl_ghost_1')).currentResourceId, 'ghost');
     });
-  });
-
-  group('groups', () {
-    GroupPlayerDraft p(int n, String res, ControllerChoice c) =>
-        GroupPlayerDraft(
-          playerNumber: n,
-          resourceId: res,
-          resourceName: res.toUpperCase(),
-          activityCode: 'PS5',
-          gameId: 'g_wwe',
-          controllers: c,
-        );
-
-    test(
-      'a group pad is never offered; a group player at VOID can borrow',
-      () async {
-        // A group player on HEX holds HEX-1 and VOID-1 (borrowed in).
-        final hb = await board('hex');
-        final g = await groups.create(
-          GroupSessionDraft(
-            primaryCustomerId: who,
-            playerCount: 2,
-            purchasedControllerCount: 2,
-            players: [
-              p(
-                1,
-                'hex',
-                ControllerChoice.none
-                    .reconcile(hb)
-                    .request(1, hb)
-                    .toggle('ctl_void_1', hb),
-              ),
-            ],
-          ),
-        );
-        expect(g.isOk, isTrue, reason: g.failureOrNull?.display);
-        final vb = await board('void');
-        expect(vb.option('ctl_void_1')!.note, 'Player 1 at HEX');
-        expect(vb.option('ctl_hex_1')!.selectable, isFalse);
-
-        // Player 2 at VOID: VOID-2 here plus GHOST-1 borrowed.
-        final add = await groups.addPlayer(
-          groupId: g.valueOrNull!.id,
-          playerNumber: 2,
-          resourceId: 'void',
-          resourceName: 'VOID',
-          activityCode: 'PS5',
-          gameId: 'g_wwe',
-          controllers: ControllerChoice.none
-              .reconcile(vb)
-              .request(1, vb)
-              .toggle('ctl_ghost_1', vb),
-        );
-        expect(add.isOk, isTrue, reason: add.failureOrNull?.display);
-        expect(await held(), {
-          'ctl_hex_1',
-          'ctl_void_1',
-          'ctl_void_2',
-          'ctl_ghost_1',
-        });
-      },
-    );
-
-    test(
-      'a station whose own pads are lent out is still a group candidate',
-      () async {
-        await hexOnFour();
-        final vb = await board('void');
-        await single.start(
-          at(
-            'void',
-            ControllerChoice.none
-                .reconcile(vb)
-                .request(2, vb)
-                .toggle('ctl_ghost_1', vb)
-                .toggle('ctl_ghost_2', vb),
-          ),
-        );
-        final rb = await board('rift');
-        final g = (await groups.create(
-          GroupSessionDraft(
-            primaryCustomerId: who,
-            playerCount: 2,
-            purchasedControllerCount: 2,
-            players: [
-              p(1, 'rift', ControllerChoice.none.reconcile(rb).request(1, rb)),
-            ],
-          ),
-        )).valueOrNull!;
-        final candidates = await groups.candidateResources(
-          group: g,
-          playerNumber: 2,
-          activityCode: 'PS5',
-          gameId: 'g_wwe',
-        );
-        expect(
-          candidates.map((r) => r.id),
-          contains('ghost'),
-          reason: 'GHOST is free as a station even with no pads on it',
-        );
-      },
-    );
   });
 
   group('ending and returning', () {

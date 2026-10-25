@@ -3,8 +3,7 @@
 -- BEFORE INSERT OR UPDATE OF resource_id, ended_at row trigger
 -- (t_segment_resource_free) on session_segments. For an open segment it locks
 -- the resources row, then raises 'resource_busy' if the station has any other
--- open segment or any open group assignment. Pairs with
--- assert_resource_free_for_assignment: occupancy spans both tables.
+-- open segment.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public.assert_resource_free_for_segment()
   returns trigger
@@ -18,8 +17,7 @@ begin
     return new;
   end if;
   -- Serialise claims on this resource: two concurrent starts must not both see
-  -- it free. A unique index cannot do this because occupancy spans two tables,
-  -- so the lock is what makes the check sound.
+  -- it free (ux_one_open_segment_per_resource backs this up).
   perform 1 from resources where id = new.resource_id for update;
 
   select count(*) into busy from (
@@ -27,10 +25,6 @@ begin
       where resource_id = new.resource_id
         and ended_at is null
         and id <> new.id
-    union all
-    select 1 from group_assignments
-      where resource_id = new.resource_id
-        and ended_at is null
   ) t;
 
   if busy > 0 then
@@ -41,7 +35,7 @@ begin
 end;
 $function$;
 
-comment on function public.assert_resource_free_for_segment() is 'Trigger (session_segments): refuse an open segment on a station that already has an open segment or an open group assignment (resource_busy), serialised by locking the station row.';
+comment on function public.assert_resource_free_for_segment() is 'Trigger (session_segments): refuse an open segment on a station that already has an open segment (resource_busy), serialised by locking the station row.';
 
 grant execute
   on function "public"."assert_resource_free_for_segment"()

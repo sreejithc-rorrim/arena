@@ -1,4 +1,4 @@
--- Floor guarantees the pre-sync RPC suites (02 single sessions, 03 groups)
+-- Floor guarantees the pre-sync RPC suite (02 single sessions)
 -- used to pin, re-asserted through the only client write path: sync_push →
 -- op_*. What 07/08/10 already prove is not repeated here: not_playable,
 -- payment replay/duplicate, partial→paid, overpayment, staff void refused,
@@ -66,18 +66,6 @@ create function pg_temp.pay(p_session text, p_amount bigint, p_refund boolean de
   select jsonb_build_object('scope','single','parent_id', p_session::uuid,
     'payment_id', gen_random_uuid(), 'amount_paise', p_amount, 'method','cash',
     'is_refund', p_refund, 'reason', p_reason) $$ language sql;
--- One count-only group player (no tracked pads, no borrows).
-create function pg_temp.asg(p_id text, p_player int, p_res text, p_act text, p_cc int) returns jsonb as $$
-  select jsonb_build_object('id', p_id::uuid, 'player_number', p_player, 'idx', 0,
-    'resource_id', pg_temp.r(p_res), 'activity_code', p_act, 'controller_count', p_cc,
-    'allocations','[]'::jsonb, 'moves','[]'::jsonb) $$ language sql;
-create function pg_temp.grp(p_id text, p_at text, p_end text, p_assignments jsonb) returns jsonb as $$
-  select jsonb_build_object('id', p_id::uuid,
-    'primary_customer_id','cccccccc-0000-0000-0000-000000000011',
-    'player_count', jsonb_array_length(p_assignments), 'purchased_controller_count', 4,
-    'started_at', p_at, 'scheduled_end_at', p_end,
-    'pricing_snapshot', _pricing_snapshot('e0000000-0000-4000-8000-000000000111'::uuid),
-    'billing_mode','per_system', 'assignments', p_assignments) $$ language sql;
 
 select pg_temp.as_user('11000000-0000-0000-0000-000000000002');
 select is(pg_temp.push('customer.create', jsonb_build_object(
@@ -175,113 +163,6 @@ select is((select count(*)::int from audit_log where entity_id = 'a1100000-0000-
   'the void wrote exactly one audit row');
 select is((select void_reason from sessions where id = 'a1100000-0000-0000-0000-000000000003'),
   'test correction', 'and the second void did not overwrite the reason');
-
--- ------------------------------------------- 7. groups: create + replay
-select pg_temp.as_user('11000000-0000-0000-0000-000000000002');
-select is(pg_temp.push('group.create', pg_temp.grp('91100000-0000-0000-0000-000000000001',
-    '2026-10-01T09:00:00Z','2026-10-01T10:00:00Z', jsonb_build_array(
-      pg_temp.asg('92100000-0000-0000-0000-000000000001', 1, 'VOID', 'PS5', 2),
-      pg_temp.asg('92100000-0000-0000-0000-000000000002', 2, 'GHOST', 'PS5', 2))),
-    'f1100000-0000-0000-0000-000000000011')->>'status', 'applied',
-  'a group starts with two players on VOID and GHOST');
-select is((select count(*)::int from group_assignments
-            where group_id = '91100000-0000-0000-0000-000000000001' and ended_at is null), 2,
-  'two open assignments, under the device''s ids');
-select is(pg_temp.push('group.create', pg_temp.grp('91100000-0000-0000-0000-000000000001',
-    '2026-10-01T09:00:00Z','2026-10-01T10:00:00Z', jsonb_build_array(
-      pg_temp.asg('92100000-0000-0000-0000-000000000001', 1, 'VOID', 'PS5', 2),
-      pg_temp.asg('92100000-0000-0000-0000-000000000002', 2, 'GHOST', 'PS5', 2))),
-    'f1100000-0000-0000-0000-000000000011')->>'replayed', 'true',
-  'the same group op pushed again is replayed');
-select is((select count(*)::int from group_sessions where arena_id = 'e0000000-0000-4000-8000-000000000111'::uuid),
-  1, 'no second group row');
-
--- ------------------------------------------- 8. cross-group / single exclusion
-select is(pg_temp.push('group.create', pg_temp.grp('91100000-0000-0000-0000-000000000002',
-    '2026-10-01T09:10:00Z','2026-10-01T10:00:00Z', jsonb_build_array(
-      pg_temp.asg('92200000-0000-0000-0000-000000000001', 1, 'VOID', 'PS5', 1))))->>'error',
-  'resource_busy', 'another group cannot sit on a station this group holds');
-select is(pg_temp.push('session.start', pg_temp.start(
-    'a1100000-0000-0000-0000-000000000004','b1100000-0000-0000-0000-000000000004','GHOST',
-    '2026-10-01T09:10:00Z','2026-10-01T10:00:00Z'))->>'error', 'resource_busy',
-  'nor can a single session');
-select is((select count(*)::int from group_sessions where id = '91100000-0000-0000-0000-000000000002')
-        + (select count(*)::int from sessions where id = 'a1100000-0000-0000-0000-000000000004'), 0,
-  'neither refused op left a row');
-
--- ------------------------------------------- 9. sharing a station within the group
--- VOID has 4 usable pads; player 1 holds 2 of the 4-controller cap.
-select is(pg_temp.push('group.add', jsonb_build_object('group_id','91100000-0000-0000-0000-000000000001',
-    'at','2026-10-01T09:00:00Z',
-    'assignment', pg_temp.asg('92100000-0000-0000-0000-000000000003', 3, 'VOID', 'PS5', 2)))
-    ->>'status', 'applied', 'a third player shares VOID (2+2 controllers, 4 pads there)');
-select is(pg_temp.push('group.add', jsonb_build_object('group_id','91100000-0000-0000-0000-000000000001',
-    'at','2026-10-01T09:00:00Z',
-    'assignment', pg_temp.asg('92100000-0000-0000-0000-000000000004', 4, 'VOID', 'PS5', 1)))
-    ->>'error', 'controllers_exceeded', 'a fifth controller on one station is refused');
-select is(pg_temp.push('group.add', jsonb_build_object('group_id','91100000-0000-0000-0000-000000000001',
-    'at','2026-10-01T09:00:00Z',
-    'assignment', pg_temp.asg('92100000-0000-0000-0000-000000000004', 4, 'GHOST', 'PS5', 1)))
-    ->>'error', 'controllers_unavailable', 'sharing GHOST beyond its 2 usable pads is refused');
-select is((select count(*)::int from group_assignments where group_id = '91100000-0000-0000-0000-000000000001'),
-  3, 'the refused players were not seated');
-select is(pg_temp.push('group.create', pg_temp.grp('91100000-0000-0000-0000-000000000003',
-    '2026-10-01T11:00:00Z','2026-10-01T12:00:00Z', jsonb_build_array(
-      pg_temp.asg('92300000-0000-0000-0000-000000000001', 1, 'Pool Table 1', 'POOL', null))))
-    ->>'status', 'applied', 'a pool group starts');
-select is(pg_temp.push('group.add', jsonb_build_object('group_id','91100000-0000-0000-0000-000000000003',
-    'at','2026-10-01T11:05:00Z',
-    'assignment', pg_temp.asg('92300000-0000-0000-0000-000000000002', 2, 'Pool Table 1', 'POOL', null)))
-    ->>'error', 'resource_busy', 'an activity without controllers cannot share its station');
-
--- ------------------------------------------- 10. group end closes every player
--- Per system, started in happy hours (20% lower): VOID at 4 pads ₹384 + GHOST at 2 pads ₹224 = ₹608.
-create function pg_temp.gch(p_res text, p_cc int, p_price int) returns jsonb as $$
-  select jsonb_build_object('id', gen_random_uuid(), 'charge_index', 0, 'band_code', 'standard',
-    'activity_code','PS5','resource_id', pg_temp.r(p_res),'controller_count', p_cc,
-    'segment_start','2026-10-01T09:00:00Z','segment_end','2026-10-01T10:00:00Z',
-    'played_minutes',60,'billed_minutes',60,'unit_minutes',60,'unit_price_paise', p_price,
-    'amount_paise', p_price) $$ language sql;
-select is(pg_temp.push('group.end', jsonb_build_object('group_id','91100000-0000-0000-0000-000000000001',
-    'ended_at','2026-10-01T10:00:00Z','billed_amount_paise', 60800,
-    'expected_assignment_ids', jsonb_build_array('92100000-0000-0000-0000-000000000001',
-      '92100000-0000-0000-0000-000000000002','92100000-0000-0000-0000-000000000003'),
-    'expected_scheduled_end_at','2026-10-01T10:00:00Z',
-    'charges', jsonb_build_array(pg_temp.gch('VOID', 4, 38400), pg_temp.gch('GHOST', 2, 22400))))
-    ->>'status', 'applied', 'the group ends');
-select is((select status from group_sessions where id = '91100000-0000-0000-0000-000000000001'),
-  'completed', 'it is completed');
-select is((select count(*)::int from group_assignments
-            where group_id = '91100000-0000-0000-0000-000000000001' and ended_at is null), 0,
-  'every player''s assignment is closed');
-
--- ------------------------------------------- 11. group payments
-select is(pg_temp.push('payment.record', jsonb_build_object('scope','group',
-    'parent_id','91100000-0000-0000-0000-000000000001','payment_id','e1100000-0000-0000-0000-000000000001',
-    'amount_paise', 60800, 'method','cash'), 'f1100000-0000-0000-0000-000000000021')
-    ->'result'->>'payment_status', 'paid', 'paying the group bill in full → paid');
-select is(pg_temp.push('payment.record', jsonb_build_object('scope','group',
-    'parent_id','91100000-0000-0000-0000-000000000001','payment_id','e1100000-0000-0000-0000-000000000001',
-    'amount_paise', 60800, 'method','cash'), 'f1100000-0000-0000-0000-000000000021')
-    ->>'replayed', 'true', 'a retried group payment is replayed');
-select is((select count(*)::int from group_payments where group_id = '91100000-0000-0000-0000-000000000001'),
-  1, 'exactly one group payment row');
-
--- ------------------------------------------- 12. group void
-select is(pg_temp.push('group.void', jsonb_build_object('group_id','91100000-0000-0000-0000-000000000003',
-    'reason','x'))->>'error', 'forbidden', 'staff cannot void a group');
-select pg_temp.as_user('11000000-0000-0000-0000-000000000001');
-select is(pg_temp.push('group.void', jsonb_build_object('group_id','91100000-0000-0000-0000-000000000003',
-    'reason','test','at','2026-10-01T11:20:00Z'))->>'status', 'applied', 'owner voids the pool group');
-select is((select status from group_sessions where id = '91100000-0000-0000-0000-000000000003'),
-  'voided', 'it is voided');
-select is((select count(*)::int from group_assignments
-            where group_id = '91100000-0000-0000-0000-000000000003' and ended_at is null), 0,
-  'and its player is off the table');
-select is(pg_temp.push('group.void', jsonb_build_object('group_id','91100000-0000-0000-0000-000000000003',
-    'reason','again'))->'result'->>'adjusted', 'true', 'voiding it again is a no-op (adjusted)');
-select is((select count(*)::int from audit_log where entity_id = '91100000-0000-0000-0000-000000000003'), 1,
-  'one audit row for the group void');
 
 select * from finish();
 rollback;

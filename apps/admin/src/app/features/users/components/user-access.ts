@@ -14,8 +14,8 @@ import { ArenaUser, FLOOR_PERMS, OWNER_ONLY_PERMS } from '../data/user.models';
 
 /**
  * A staff member's app access (staff.update): the permission switches and turning their access
- * off or back on. Changes need Settings; owner-level members (Money or Reports) and Payroll /
- * Finalise salary only an owner may change, and nobody changes their own. Owner accounts are not
+ * off or back on. Changes need Settings; owner-level members (Money or Reports) and Edit own
+ * bills / Add missed bills only an owner may change, and nobody changes their own. Owner accounts are not
  * managed here: they have every permission (Settings › Owners & access).
  */
 @Component({
@@ -32,7 +32,7 @@ import { ArenaUser, FLOOR_PERMS, OWNER_ONLY_PERMS } from '../data/user.models';
         <p role="note" class="text-[13px] leading-[1.45] text-muted">{{ note }}</p>
       } @else if (!isOwner()) {
         <p role="note" class="text-[13px] leading-[1.45] text-muted">
-          Only an owner can give or take away Payroll and Finalise salary.
+          Only an owner can give or take away Edit own bills and Add missed bills.
         </p>
       }
       @for (p of perms; track p.code) {
@@ -125,7 +125,7 @@ export class UserAccess {
   /** Without the Settings permission the server refuses every change here. */
   protected readonly canChangeAccess = computed(() => this.arena.canEdit() && !this.accessNote());
 
-  /** Payroll and Finalise salary: only an owner may switch them (staff.update refuses others). */
+  /** Edit own bills and Add missed bills: only an owner may switch them (staff.update refuses others). */
   protected ownerOnlyLocked(code: string): boolean {
     return OWNER_ONLY_PERMS.includes(code) && !this.isOwner();
   }
@@ -138,7 +138,7 @@ export class UserAccess {
         data: {
           title: `Turn off ${u.name}'s access?`,
           message:
-            'They are signed out of the floor app and cannot sign in to this venue until you turn it back on. Their attendance, leave, pay and bills stay as they are.',
+            'They are signed out of the floor app and cannot sign in to this venue until you turn it back on. Their bills stay as they are.',
           confirm: 'Turn off',
           danger: true,
         },

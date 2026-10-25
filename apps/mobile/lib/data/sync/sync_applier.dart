@@ -106,7 +106,7 @@ class SyncApplier {
   /// Upserts server rows, closings first.
   Future<void> applyRows(List<ServerRow> rows) async {
     bool opens(ServerRow x) =>
-        const {'session_segments', 'group_assignments', 'controller_allocations'}
+        const {'session_segments', 'controller_allocations'}
             .contains(x.table) &&
         x.row['ended_at'] == null;
     for (final x in rows.where((x) => !opens(x))) {
@@ -156,34 +156,6 @@ class SyncApplier {
             .go();
         await (_db.delete(_db.sessions)
               ..where((t) => t.id.equals(id) & t.id.isNotIn(ids('sessions'))))
-            .go();
-      case 'group':
-        await (_db.delete(_db.groupPayments)
-              ..where((t) =>
-                  t.groupId.equals(id) & t.id.isNotIn(ids('group_payments'))))
-            .go();
-        await (_db.delete(_db.groupCharges)
-              ..where((t) =>
-                  t.groupId.equals(id) & t.id.isNotIn(ids('group_charges'))))
-            .go();
-        await (_db.delete(_db.groupExtensions)
-              ..where((t) =>
-                  t.groupId.equals(id) & t.id.isNotIn(ids('group_extensions'))))
-            .go();
-        await (_db.delete(_db.controllerAllocations)
-              ..where((t) => t.groupId.equals(id) &
-                  t.id.isNotIn(ids('controller_allocations'))))
-            .go();
-        await (_db.delete(_db.controllerMoves)
-              ..where((t) => t.sessionRef.equals('g:$id') &
-                  t.id.isNotIn(ids('controller_moves'))))
-            .go();
-        await (_db.delete(_db.groupAssignments)
-              ..where((t) => t.groupId.equals(id) &
-                  t.id.isNotIn(ids('group_assignments'))))
-            .go();
-        await (_db.delete(_db.groupSessions)
-              ..where((t) => t.id.equals(id) & t.id.isNotIn(ids('group_sessions'))))
             .go();
       case 'controller':
         // Location + history are the pad's; who holds it belongs to sessions.
@@ -368,7 +340,7 @@ class SyncApplier {
           'minimum_charge_minutes', 'early_exit', 'rounding_scope',
           'late_arrival', 'vr_unit_rounding', 'money_rounding_paise',
           'money_rounding_dir', 'payment_timing', 'allow_extend_past_close',
-          'cleaning_gap_minutes', 'group_billing_mode',
+          'cleaning_gap_minutes',
         ];
         await _db.into(_db.billingPolicies).insertOnConflictUpdate(
             BillingPolicyRow(
@@ -530,94 +502,16 @@ class SyncApplier {
               reason: r['reason'] as String?,
               createdAt: _at(r['created_at'])!,
             ).toCompanion(false));
-      case 'group_sessions':
-        await _db.into(_db.groupSessions).insertOnConflictUpdate(GroupSessionRow(
-              id: r['id'] as String,
-              primaryCustomerId: r['primary_customer_id'] as String,
-              playerCount: r['player_count'] as int,
-              purchasedControllerCount: r['purchased_controller_count'] as int,
-              status: r['status'] as String,
-              paymentStatus: r['payment_status'] as String,
-              startedAt: _at(r['started_at'])!,
-              scheduledEndAt: _at(r['scheduled_end_at'])!,
-              actualEndedAt: _at(r['actual_ended_at']),
-              pricingSnapshot:
-                  Map<String, dynamic>.from(r['pricing_snapshot'] as Map),
-              billingMode: r['billing_mode'] as String,
-              billedAmountPaise: r['billed_amount_paise'] as int?,
-              voidReason: r['void_reason'] as String?,
-              createdAt: _at(r['created_at'])!,
-              updatedAt: _at(r['updated_at'])!,
-            ).toCompanion(false));
-      case 'group_assignments':
-        await _db.into(_db.groupAssignments).insertOnConflictUpdate(
-            GroupAssignmentRow(
-              id: r['id'] as String,
-              groupId: r['group_id'] as String,
-              playerNumber: r['player_number'] as int,
-              playerLabel: r['player_label'] as String?,
-              index: r['idx'] as int,
-              resourceId: r['resource_id'] as String,
-              activityCode: r['activity_code'] as String,
-              gameId: r['game_id'] as String?,
-              controllerCount: r['controller_count'] as int?,
-              startedAt: _at(r['started_at'])!,
-              endedAt: _at(r['ended_at']),
-              createdAt: _at(r['created_at'])!,
-            ).toCompanion(false));
-      case 'group_extensions':
-        await _db.into(_db.groupExtensions).insertOnConflictUpdate(
-            GroupExtensionRow(
-              id: r['id'] as String,
-              groupId: r['group_id'] as String,
-              addedMinutes: r['added_minutes'] as int,
-              oldEndAt: _at(r['old_end_at'])!,
-              newEndAt: _at(r['new_end_at'])!,
-              addedAmountPaise: r['added_amount_paise'] as int,
-              reason: r['reason'] as String?,
-              createdAt: _at(r['created_at'])!,
-            ).toCompanion(false));
-      case 'group_charges':
-        await _db.into(_db.groupCharges).insertOnConflictUpdate(GroupChargeRow(
-              id: r['id'] as String,
-              groupId: r['group_id'] as String,
-              assignmentId: r['assignment_id'] as String?,
-              playerNumber: r['player_number'] as int?,
-              chargeIndex: r['charge_index'] as int,
-              bandCode: r['band_code'] as String,
-              activityCode: r['activity_code'] as String,
-              resourceId: r['resource_id'] as String?,
-              controllerCount: r['controller_count'] as int?,
-              segmentStart: _at(r['segment_start'])!,
-              segmentEnd: _at(r['segment_end'])!,
-              playedMinutes: r['played_minutes'] as int,
-              billedMinutes: r['billed_minutes'] as int,
-              unitMinutes: r['unit_minutes'] as int,
-              unitPricePaise: r['unit_price_paise'] as int,
-              amountPaise: r['amount_paise'] as int,
-            ).toCompanion(false));
-      case 'group_payments':
-        await _db.into(_db.groupPayments).insertOnConflictUpdate(GroupPaymentRow(
-              id: r['id'] as String,
-              groupId: r['group_id'] as String,
-              amountPaise: r['amount_paise'] as int,
-              method: r['method'] as String,
-              isRefund: r['is_refund'] as bool,
-              note: r['note'] as String?,
-              reason: r['reason'] as String?,
-              createdAt: _at(r['created_at'])!,
-            ).toCompanion(false));
       case 'controller_allocations':
+        // Only single-session pads are kept on the device; a row of another
+        // scope (group sessions were removed) is ignored.
+        if (r['scope'] != 'single') return;
         final row = ControllerAllocationRow(
           id: r['id'] as String,
           controllerId: r['controller_id'] as String,
           scope: r['scope'] as String,
           sessionId: r['session_id'] as String?,
-          groupId: r['group_id'] as String?,
           segmentId: r['segment_id'] as String?,
-          assignmentId: r['assignment_id'] as String?,
-          playerNumber: r['player_number'] as int?,
-          playerLabel: r['player_label'] as String?,
           resourceId: r['resource_id'] as String,
           activityCode: r['activity_code'] as String,
           gameId: r['game_id'] as String?,

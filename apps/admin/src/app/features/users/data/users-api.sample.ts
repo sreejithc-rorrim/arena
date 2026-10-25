@@ -11,7 +11,6 @@ const ALL_PERMS = [
   'money',
   'reports',
   'settings',
-  'attendance_review',
 ];
 
 function user(

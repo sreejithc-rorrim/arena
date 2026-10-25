@@ -19,8 +19,7 @@ from unnest(array[
   'resource_activities','customers','rate_cards','rate_bands','rates',
   'billing_policies','holidays','game_categories','games','game_controls',
   'game_resources','bookings','sessions','session_segments','session_extensions',
-  'session_charges','payments','group_sessions','group_assignments',
-  'group_extensions','group_charges','group_payments','settings','audit_log'
+  'session_charges','payments','settings','audit_log'
 ]) as t;
 
 -- The Drift parent owns no per-stretch config: these live on the open segment.
@@ -32,7 +31,6 @@ select col_type_is('public','payments','amount_paise','bigint','payments.amount_
 select col_type_is('public','session_charges','amount_paise','bigint','session_charges.amount_paise is bigint');
 select col_type_is('public','rates','price_paise','bigint','rates.price_paise is bigint');
 select col_type_is('public','sessions','billed_amount_paise','bigint','sessions.billed_amount_paise is bigint');
-select col_type_is('public','group_payments','amount_paise','bigint','group_payments.amount_paise is bigint');
 
 -- Time is timestamptz; snapshots are jsonb.
 select col_type_is('public','sessions','started_at','timestamp with time zone','started_at is timestamptz');
@@ -61,15 +59,13 @@ select ok(exists(
    where contype='f' and conrelid = ('public.'||t)::regclass
      and pg_get_constraintdef(oid) like '%activities(arena_id, code)%'),
   t || ' has composite activity FK')
-from unnest(array['session_segments','group_assignments','session_charges','group_charges']) as t;
+from unnest(array['session_segments','session_charges']) as t;
 
 -- Idempotency: request_id partial-unique indexes on every table a retry can hit.
 select has_index('public', t, 'ux_' || base || '_request', t || ' has request_id unique index')
 from (values
   ('sessions','sessions'),('session_extensions','extensions'),('payments','payments'),
-  ('session_segments','segments'),('group_sessions','groups'),
-  ('group_assignments','assignments'),('group_extensions','group_extensions'),
-  ('group_payments','group_payments')
+  ('session_segments','segments')
 ) as x(t, base);
 
 -- One-open-segment-per-resource partial unique index (mirrors Drift).

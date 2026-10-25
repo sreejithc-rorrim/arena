@@ -139,14 +139,6 @@ class _HistoryTile extends StatelessWidget {
                   style: ArenaType.label.copyWith(color: arena.text),
                 ),
               ),
-              if (row.isGroup) ...[
-                ArenaTag(
-                  label: 'Group',
-                  foreground: arena.textMuted,
-                  background: arena.surfaceRaised,
-                ),
-                const SizedBox(width: AppSpacing.sm),
-              ],
               if (showMoney) StatusDotLabel(label: label, color: color),
             ],
           ),

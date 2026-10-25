@@ -1,7 +1,7 @@
 -- _station_usable(p_arena, p_resource) — require the station to exist and be 'available'.
 --
 -- Raises 'resource_missing' or 'resource_unavailable' (hint: its status).
--- Used by op_session_start, op_session_reconfigure and _group_assignable.
+-- Used by op_session_start and op_session_reconfigure.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._station_usable (
   p_arena    uuid,

@@ -97,7 +97,7 @@ class Controllers extends Table {
   TextColumn get notes => text().nullable()();
 
   /// Set while on loan: where to return it, and which session owes the return
-  /// (`s:<sessionId>` / `g:<groupId>`). Both null for a permanent move.
+  /// (`s:<sessionId>`). Both null for a permanent move.
   TextColumn get loanReturnTo => text().nullable()();
   TextColumn get loanSessionRef => text().nullable()();
 
@@ -107,7 +107,7 @@ class Controllers extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-/// One physical controller held by one player/session for a stretch of time
+/// One physical controller held by one session for a stretch of time
 /// (brief §3–§5). Append-only: a move or a change end-dates the open row and
 /// opens a new one, so the per-pad timeline is never rewritten. [resourceId] is
 /// the station the pad is being USED at, which can differ from the pad's
@@ -118,13 +118,9 @@ class Controllers extends Table {
 class ControllerAllocations extends Table {
   TextColumn get id => text()();
   TextColumn get controllerId => text()();
-  TextColumn get scope => text()(); // 'single' | 'group'
+  TextColumn get scope => text()(); // 'single'
   TextColumn get sessionId => text().nullable()();
-  TextColumn get groupId => text().nullable()();
   TextColumn get segmentId => text().nullable()();
-  TextColumn get assignmentId => text().nullable()();
-  IntColumn get playerNumber => integer().nullable()();
-  TextColumn get playerLabel => text().nullable()();
   TextColumn get resourceId => text()();
   TextColumn get activityCode => text()();
   TextColumn get gameId => text().nullable()();
@@ -149,7 +145,7 @@ class ControllerMoves extends Table {
   TextColumn get fromResourceId => text()();
   TextColumn get toResourceId => text()();
   TextColumn get kind => text()(); // ControllerMoveKind code
-  TextColumn get sessionRef => text().nullable()(); // s:<id> / g:<id>
+  TextColumn get sessionRef => text().nullable()(); // s:<id>
   DateTimeColumn get movedAt => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
 
@@ -373,109 +369,6 @@ class SessionCharges extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-/// The parent of a group session (group feature §1). The one authoritative time
-/// window every assignment shares lives here; per-player/per-system config lives
-/// in GroupAssignments.
-@DataClassName('GroupSessionRow')
-class GroupSessions extends Table {
-  TextColumn get id => text()();
-  TextColumn get primaryCustomerId => text()();
-  IntColumn get playerCount => integer()();
-  IntColumn get purchasedControllerCount => integer()();
-  TextColumn get status => text()();
-  TextColumn get paymentStatus => text()();
-  DateTimeColumn get startedAt => dateTime()();
-  DateTimeColumn get scheduledEndAt => dateTime()();
-  DateTimeColumn get actualEndedAt => dateTime().nullable()();
-  TextColumn get pricingSnapshot => text().map(const JsonMapConverter())();
-  TextColumn get billingMode => text()(); // GroupBillingMode code
-  IntColumn get billedAmountPaise => integer().nullable()();
-  TextColumn get voidReason => text().nullable()();
-  DateTimeColumn get createdAt => dateTime()();
-  DateTimeColumn get updatedAt => dateTime()();
-
-  @override
-  Set<Column> get primaryKey => {id};
-}
-
-/// One player's use of one (resource, game, controllers) for a stretch of the
-/// group's window (group feature §4). Many are open at once — one per active
-/// player. The open assignment has endedAt == null. No per-assignment end: the
-/// countdown is the parent's.
-@DataClassName('GroupAssignmentRow')
-class GroupAssignments extends Table {
-  TextColumn get id => text()();
-  TextColumn get groupId => text()();
-  IntColumn get playerNumber => integer()();
-  TextColumn get playerLabel => text().nullable()();
-  IntColumn get index => integer()();
-  TextColumn get resourceId => text()();
-  TextColumn get activityCode => text()();
-  TextColumn get gameId => text().nullable()();
-  IntColumn get controllerCount => integer().nullable()();
-  DateTimeColumn get startedAt => dateTime()();
-  DateTimeColumn get endedAt => dateTime().nullable()();
-  DateTimeColumn get createdAt => dateTime()();
-
-  @override
-  Set<Column> get primaryKey => {id};
-}
-
-@DataClassName('GroupExtensionRow')
-class GroupExtensions extends Table {
-  TextColumn get id => text()();
-  TextColumn get groupId => text()();
-  IntColumn get addedMinutes => integer()();
-  DateTimeColumn get oldEndAt => dateTime()();
-  DateTimeColumn get newEndAt => dateTime()();
-  IntColumn get addedAmountPaise => integer().withDefault(const Constant(0))();
-  TextColumn get reason => text().nullable()();
-  DateTimeColumn get createdAt => dateTime()();
-
-  @override
-  Set<Column> get primaryKey => {id};
-}
-
-@DataClassName('GroupChargeRow')
-class GroupCharges extends Table {
-  TextColumn get id => text()();
-  TextColumn get groupId => text()();
-  TextColumn get assignmentId => text().nullable()();
-  IntColumn get playerNumber => integer().nullable()();
-  IntColumn get chargeIndex => integer()();
-  TextColumn get bandCode => text()();
-  TextColumn get activityCode => text()();
-  TextColumn get resourceId => text().nullable()();
-  IntColumn get controllerCount => integer().nullable()();
-  DateTimeColumn get segmentStart => dateTime()();
-  DateTimeColumn get segmentEnd => dateTime()();
-  IntColumn get playedMinutes => integer()();
-  IntColumn get billedMinutes => integer()();
-  IntColumn get unitMinutes => integer()();
-  IntColumn get unitPricePaise => integer()();
-  IntColumn get amountPaise => integer()();
-
-  @override
-  Set<Column> get primaryKey => {id};
-}
-
-/// Group payments (append-only; refund = a row with isRefund true). Kept in its
-/// own table so single-session payments and money reports are untouched.
-@DataClassName('GroupPaymentRow')
-class GroupPayments extends Table {
-  TextColumn get id => text()();
-  TextColumn get groupId => text()();
-  IntColumn get amountPaise => integer()();
-  TextColumn get method => text()();
-  BoolColumn get isRefund => boolean().withDefault(const Constant(false))();
-  TextColumn get note => text().nullable()();
-  TextColumn get reason => text().nullable()();
-  DateTimeColumn get createdAt => dateTime()();
-
-  @override
-  Set<Column> get primaryKey => {id};
-}
-
 /// A future reservation (spec §18). resourceId null = any compatible system.
 @DataClassName('BookingRow')
 class Bookings extends Table {
@@ -551,7 +444,7 @@ class SyncOutbox extends Table {
   TextColumn get opId => text().unique()();
   TextColumn get kind => text()(); // e.g. session.start, payment.record
   /// What the op is about, for rollback after a rejection:
-  /// session | group | controller | customer | booking | catalog | staff.
+  /// session | controller | customer | booking | catalog | staff.
   TextColumn get entityType => text()();
   TextColumn get entityId => text()();
   TextColumn get payload => text()(); // JSON, exactly what sync_push receives
@@ -633,11 +526,6 @@ class Payments extends Table {
   SessionSegments,
   SessionExtensions,
   SessionCharges,
-  GroupSessions,
-  GroupAssignments,
-  GroupExtensions,
-  GroupCharges,
-  GroupPayments,
   Payments,
   Bookings,
   Users,
@@ -651,7 +539,7 @@ class AppDatabase extends _$AppDatabase {
   /// Readable without constructing (and therefore without opening) the
   /// database, so the pre-open backup in `main()` can compare it against what
   /// is on disk and decide whether a migration is about to run.
-  static const expectedSchemaVersion = 18;
+  static const expectedSchemaVersion = 19;
 
   @override
   int get schemaVersion => expectedSchemaVersion;
@@ -701,13 +589,6 @@ class AppDatabase extends _$AppDatabase {
     );
     await customStatement(
       'CREATE INDEX IF NOT EXISTS ix_alloc_session ON controller_allocations (session_id)',
-    );
-    await customStatement(
-      'CREATE INDEX IF NOT EXISTS ix_alloc_group ON controller_allocations (group_id)',
-    );
-    await customStatement(
-      'CREATE INDEX IF NOT EXISTS ix_alloc_assignment '
-      'ON controller_allocations (assignment_id)',
     );
     await customStatement(
       'CREATE INDEX IF NOT EXISTS ix_moves_controller '
@@ -841,6 +722,32 @@ class AppDatabase extends _$AppDatabase {
             "ELSE '[\"single\"]' END",
           );
           await customStatement('ALTER TABLE games DROP COLUMN player_mode');
+        },
+        // v18 -> v19: group sessions removed (owner-approved: their tables
+        // are dropped). No session, segment, extension, charge, payment,
+        // booking or customer row is touched. Pads held for a group player
+        // (controller_allocations scope 'group') go with their groups, so no
+        // pad stays "in use" by a group that no longer exists; every
+        // single-session allocation is copied across unchanged while the
+        // table is rebuilt without its group-only columns. Pad locations
+        // (controllers, controller_moves) and the outbox are left as they are.
+        18: (m) async {
+          // Indexes on the columns being removed would break the rebuild.
+          await customStatement('DROP INDEX IF EXISTS ix_alloc_group');
+          await customStatement('DROP INDEX IF EXISTS ix_alloc_assignment');
+          await customStatement(
+            "DELETE FROM controller_allocations WHERE scope = 'group'",
+          );
+          await m.alterTable(TableMigration(controllerAllocations));
+          for (final t in const [
+            'group_payments',
+            'group_charges',
+            'group_extensions',
+            'group_assignments',
+            'group_sessions',
+          ]) {
+            await m.deleteTable(t);
+          }
         },
       };
 

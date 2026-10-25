@@ -6,7 +6,7 @@ import { EMBEDDED_DETAIL } from './detail-pane';
 export interface DetailTab {
   readonly key: string;
   readonly label: string;
-  /** The tab's own URL: tabs are part of the route path (e.g. `/settings/staff/leave`). */
+  /** The tab's own URL: tabs are part of the route path (e.g. `/staff/team/<staff>/access`). */
   readonly link: string | readonly unknown[];
 }
 

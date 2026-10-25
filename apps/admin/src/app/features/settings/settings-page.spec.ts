@@ -16,7 +16,7 @@ describe('Settings', () => {
       ['Billing rules', 'Rounding, grace, minimum charge'],
       ['Sessions', 'Time options and warnings'],
       ['Owners & access', 'Who owns the venue, inviting an owner'],
-      ['Staff', 'Schedule, clock-in, attendance, leave, payroll rules'],
+      ['Staff', 'Staff terms'],
     ]);
     const arena = t.doc().querySelector('app-arena-settings') as HTMLElement;
     expect(t.text(arena.querySelector('h2'))).toBe('Arena');
@@ -180,7 +180,6 @@ describe('Settings', () => {
         'Rounding direction: To the nearest',
         'Round once or per segment: Once, on the session total',
         'Part-used block: Charge the whole block',
-        'Group across several systems: Each system billed for its own controllers',
         'Cleaning gap between sessions: None',
       ]);
       expect(bar()).toBeNull();
@@ -193,7 +192,6 @@ describe('Settings', () => {
       await pick('Block rounding', 'Round to nearest');
       await pick('Grace period', '5 min');
       await pick('Round the final bill to', '₹10');
-      await pick('Group across several systems', 'Pay once for the controllers bought');
       (rules().querySelector('mat-slide-toggle button') as HTMLButtonElement).click();
       await t.settle();
       t.button('Save', bar()!)!.click();
@@ -218,7 +216,6 @@ describe('Settings', () => {
               payment_timing: 'either',
               allow_extend_past_close: true,
               cleaning_gap_minutes: 0,
-              group_billing_mode: 'shared_controller_pool',
             },
           },
         },

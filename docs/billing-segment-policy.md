@@ -6,9 +6,8 @@ behaviour is pinned by `test/domain/services/segment_change_billing_test.dart`.
 ## How it works today
 
 A session is billed segment by segment. A new segment starts — at the exact
-instant — whenever staff change the controllers, the game or the system. A
-group's system is split into stretches whenever a player joins, leaves or
-changes controllers. Each segment / stretch is priced on its own with the
+instant — whenever staff change the controllers, the game or the system. Each segment
+is priced on its own with the
 session's frozen price list; only the final cash rounding (nearest ₹1) is
 applied once to the whole bill.
 
@@ -45,14 +44,14 @@ When block billing, a minimum charge or grace is turned on, should it apply:
   be billed for extra blocks / minimums, or get a short tail free.
 - **B — once per session.** Price each segment by the minute, then apply
   block rounding, the minimum and grace once to the session's total time. A
-  change never costs extra time. Needs a change to `SegmentBilling` /
-  `GroupBilling` and new billing tests; existing per-minute bills unchanged.
+  change never costs extra time. Needs a change to `SegmentBilling`
+  and new billing tests; existing per-minute bills unchanged.
 - **C — per segment, but changes made by staff carry no extra charge** (e.g.
   no minimum/grace on segments that start because of a change). A middle
   ground; more rules to explain at the counter.
 
-This affects controller changes, game changes, system switches and group
-joins equally — it is not new with controller allocation.
+This affects controller changes, game changes and system switches
+equally — it is not new with controller allocation.
 
 ## Recommendation
 

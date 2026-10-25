@@ -12,7 +12,6 @@ import 'package:arena_ops/core/clock/clock.dart';
 import 'package:arena_ops/data/local/database.dart';
 import 'package:arena_ops/data/local/local_catalog_repository.dart';
 import 'package:arena_ops/data/local/local_controller_allocation_repository.dart';
-import 'package:arena_ops/data/local/local_group_session_repository.dart';
 import 'package:arena_ops/data/local/local_session_repository.dart';
 import 'package:arena_ops/data/local/seed_data.dart';
 import 'package:arena_ops/data/sync/sync_applier.dart';
@@ -22,14 +21,10 @@ import 'package:arena_ops/domain/auth/permission.dart';
 import 'package:arena_ops/domain/auth/permission_guard.dart';
 import 'package:arena_ops/domain/entities/game.dart';
 import 'package:arena_ops/domain/value/enums.dart';
-import 'package:arena_ops/features/games/presentation/game_edit_screen.dart';
 import 'package:drift/drift.dart' show OrderingTerm;
 import 'package:drift/native.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../support/test_db.dart';
 
 void main() {
   late AppDatabase db;
@@ -70,7 +65,6 @@ void main() {
         catalog: catalog,
         inventory: LocalControllerAllocationRepository(db, clock),
         sessions: LocalSessionRepository(db, clock),
-        groups: LocalGroupSessionRepository(db, clock),
         clock: clock,
         guard: const PermissionGuard(owner),
       );
@@ -202,35 +196,5 @@ void main() {
       expect(hex.notes, 'disc scratched');
     });
 
-  });
-
-  testWidgets('the game form keeps the aliases it does not show', (tester) async {
-    final game = (await tester.runAsync(() => catalog.gameById('g_eafc')))!;
-    expect(game.aliases, isNotEmpty, reason: 'the seed gives EA FC an alias');
-    // The form and its save read and write the database for real.
-    Future<void> settle() async {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
-    }
-
-    await tester.pumpWidget(ProviderScope(
-      overrides: testOverrides(db, clock: clock),
-      child: MaterialApp(home: GameEditScreen(game: game)),
-    ));
-    await settle();
-    await tester.enterText(find.byType(TextField).first, 'EA SPORTS FC 26');
-    await tester.scrollUntilVisible(find.text('Save'), 300,
-        scrollable: find.byType(Scrollable).first);
-    await tester.tap(find.text('Save'));
-    await settle();
-    await settle();
-    final after = await tester.runAsync(() => catalog.gameById('g_eafc'));
-    expect(after!.name, 'EA SPORTS FC 26', reason: 'the save ran');
-    expect(after.aliases, game.aliases);
-    expect(after.lastPlayedAt, game.lastPlayedAt);
-    // Let the "saved" toast time out before the tree goes.
-    await tester.pump(const Duration(seconds: 6));
-    await tester.pumpWidget(const SizedBox());
-    await tester.pump(const Duration(milliseconds: 100));
   });
 }

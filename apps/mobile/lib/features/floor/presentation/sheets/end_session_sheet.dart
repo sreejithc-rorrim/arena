@@ -471,8 +471,8 @@ class _UnpricedWarning extends StatelessWidget {
 }
 
 /// Played past the booked end: how long, what it would add, and the staff's
-/// choice to bill it (off: the booked time only). Used by the single and group
-/// End sheets. The actual end is stored either way.
+/// choice to bill it (off: the booked time only). Used by the End sheet. The
+/// actual end is stored either way.
 class OvertimeChoice extends StatelessWidget {
   const OvertimeChoice({
     super.key,
@@ -532,6 +532,11 @@ class _BillCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final mono = AppTextStyles.mono(theme.textTheme.bodyMedium!);
+    // Lines show their exact amounts and cash rounding is applied once to the
+    // total, so it gets its own line (as in the dashboard's Sales) and the
+    // lines always add up to the total.
+    final rounding = bill.total.value - bill.subtotal.value;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -566,8 +571,23 @@ class _BillCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  Text(line.quote.amount.display,
-                      style: AppTextStyles.mono(theme.textTheme.bodyMedium!)),
+                  Text(line.quote.subtotal.display, style: mono),
+                ],
+              ),
+            ),
+          if (rounding != 0)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                key: const ValueKey('bill-rounding'),
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Rounding', style: theme.textTheme.bodyMedium),
+                  Text(
+                      rounding < 0
+                          ? '−${Paise(-rounding).display}'
+                          : Paise(rounding).display,
+                      style: mono),
                 ],
               ),
             ),

@@ -4,11 +4,11 @@
 -- code never sits in an API schema. Clients reach it only through the
 -- SECURITY INVOKER wrapper public.arena_sale.
 --
--- The _sales summary of the closed session or group p_id, plus:
+-- The _sales summary of the closed session p_id, plus:
 --   lines[]      — its charge lines in time order: {player, station,
 --                  activity, band, controllers, start, end, played_minutes,
 --                  billed_minutes, unit_minutes, unit_price_paise,
---                  amount_paise} (player is null for a single session);
+--                  amount_paise} (player is always null);
 --   extensions[] — {at, added_minutes, added_amount_paise, reason, by};
 --   history[]    — every audit_log entry of the bill in time order: {at,
 --                  action (void | waive | payment_correct), by, reason, before,
@@ -41,63 +41,33 @@ begin
   select b into v_bill from _sales(p_arena, null, null, p_id) b;
   if v_bill is null then raise exception 'not_found' using hint = 'bill'; end if;
 
-  if v_bill->>'kind' = 'single' then
-    v_bill := v_bill || jsonb_build_object(
-      'lines', coalesce((
-        select jsonb_agg(jsonb_build_object(
-            'player', null, 'station', r.name, 'activity', coalesce(a.name, ch.activity_code),
-            'band', ch.band_code, 'controllers', ch.controller_count,
-            'start', ch.segment_start, 'end', ch.segment_end,
-            'played_minutes', ch.played_minutes, 'billed_minutes', ch.billed_minutes,
-            'unit_minutes', ch.unit_minutes, 'unit_price_paise', ch.unit_price_paise,
-            'amount_paise', ch.amount_paise)
-          order by ch.segment_start, ch.segment_index)
-          from session_charges ch
-          left join resources r on r.id = ch.resource_id
-          left join activities a on a.arena_id = ch.arena_id and a.code = ch.activity_code
-         where ch.session_id = p_id), '[]'::jsonb),
-      'extensions', coalesce((
-        select jsonb_agg(jsonb_build_object('at', e.created_at, 'added_minutes', e.added_minutes,
-            'added_amount_paise', e.added_amount_paise, 'reason', e.reason, 'by', sp.name)
-          order by e.created_at)
-          from session_extensions e
-          left join staff_profiles sp on sp.arena_id = e.arena_id and sp.user_id = e.created_by
-         where e.session_id = p_id), '[]'::jsonb),
-      'rule', (
-        select _pr_rule(s.pricing_snapshot, g.activity_code, s.started_at)
-          from sessions s
-          join lateral (select activity_code from session_segments
-                         where session_id = s.id order by idx limit 1) g on true
-         where s.id = p_id));
-  else
-    v_bill := v_bill || jsonb_build_object(
-      'lines', coalesce((
-        select jsonb_agg(jsonb_build_object(
-            'player', ch.player_number, 'station', r.name, 'activity', coalesce(a.name, ch.activity_code),
-            'band', ch.band_code, 'controllers', ch.controller_count,
-            'start', ch.segment_start, 'end', ch.segment_end,
-            'played_minutes', ch.played_minutes, 'billed_minutes', ch.billed_minutes,
-            'unit_minutes', ch.unit_minutes, 'unit_price_paise', ch.unit_price_paise,
-            'amount_paise', ch.amount_paise)
-          order by ch.segment_start, ch.player_number, ch.charge_index)
-          from group_charges ch
-          left join resources r on r.id = ch.resource_id
-          left join activities a on a.arena_id = ch.arena_id and a.code = ch.activity_code
-         where ch.group_id = p_id), '[]'::jsonb),
-      'extensions', coalesce((
-        select jsonb_agg(jsonb_build_object('at', e.created_at, 'added_minutes', e.added_minutes,
-            'added_amount_paise', e.added_amount_paise, 'reason', e.reason, 'by', sp.name)
-          order by e.created_at)
-          from group_extensions e
-          left join staff_profiles sp on sp.arena_id = e.arena_id and sp.user_id = e.created_by
-         where e.group_id = p_id), '[]'::jsonb),
-      'rule', (
-        select _pr_rule(gs.pricing_snapshot, g.activity_code, gs.started_at)
-          from group_sessions gs
-          join lateral (select activity_code from group_assignments
-                         where group_id = gs.id order by player_number, idx limit 1) g on true
-         where gs.id = p_id));
-  end if;
+  v_bill := v_bill || jsonb_build_object(
+    'lines', coalesce((
+      select jsonb_agg(jsonb_build_object(
+          'player', null, 'station', r.name, 'activity', coalesce(a.name, ch.activity_code),
+          'band', ch.band_code, 'controllers', ch.controller_count,
+          'start', ch.segment_start, 'end', ch.segment_end,
+          'played_minutes', ch.played_minutes, 'billed_minutes', ch.billed_minutes,
+          'unit_minutes', ch.unit_minutes, 'unit_price_paise', ch.unit_price_paise,
+          'amount_paise', ch.amount_paise)
+        order by ch.segment_start, ch.segment_index)
+        from session_charges ch
+        left join resources r on r.id = ch.resource_id
+        left join activities a on a.arena_id = ch.arena_id and a.code = ch.activity_code
+       where ch.session_id = p_id), '[]'::jsonb),
+    'extensions', coalesce((
+      select jsonb_agg(jsonb_build_object('at', e.created_at, 'added_minutes', e.added_minutes,
+          'added_amount_paise', e.added_amount_paise, 'reason', e.reason, 'by', sp.name)
+        order by e.created_at)
+        from session_extensions e
+        left join staff_profiles sp on sp.arena_id = e.arena_id and sp.user_id = e.created_by
+       where e.session_id = p_id), '[]'::jsonb),
+    'rule', (
+      select _pr_rule(s.pricing_snapshot, g.activity_code, s.started_at)
+        from sessions s
+        join lateral (select activity_code from session_segments
+                       where session_id = s.id order by idx limit 1) g on true
+       where s.id = p_id));
 
   return v_bill || jsonb_build_object(
     'history', coalesce((
@@ -107,7 +77,7 @@ begin
         from audit_log l
         left join staff_profiles sp on sp.arena_id = l.arena_id and sp.user_id = l.created_by
        where l.arena_id = p_arena and l.entity_id = p_id
-         and l.entity_type = case when v_bill->>'kind' = 'group' then 'group_session' else 'session' end),
+         and l.entity_type = 'session'),
       '[]'::jsonb),
     'voided', (
       select jsonb_build_object('at', l.created_at, 'by', sp.name, 'reason', l.reason)

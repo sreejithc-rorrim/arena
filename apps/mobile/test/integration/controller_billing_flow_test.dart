@@ -4,7 +4,6 @@
 // controller per hour (10% less in the happy hour).
 
 import 'package:arena_ops/app/controllers/catalog_actions.dart';
-import 'package:arena_ops/app/controllers/group_session_actions.dart';
 import 'package:arena_ops/app/controllers/session_actions.dart';
 import 'package:arena_ops/app/providers/data_providers.dart';
 import 'package:arena_ops/core/clock/clock.dart';
@@ -13,7 +12,6 @@ import 'package:arena_ops/data/local/database.dart';
 import 'package:arena_ops/domain/entities/session.dart';
 import 'package:arena_ops/domain/pricing/rate.dart';
 import 'package:arena_ops/domain/repositories/commands.dart';
-import 'package:arena_ops/domain/repositories/group_commands.dart';
 import 'package:arena_ops/domain/value/enums.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -121,55 +119,5 @@ void main() {
   test('10% happy hour: ₹135 / ₹270 / ₹405 / ₹540 at every stage', () async {
     await arena(ist(2026, 10, 2, 14, 0)); // Friday 2 PM, inside the rule
     await playOneHourEach({1: 13500, 2: 27000, 3: 40500, 4: 54000});
-  });
-
-  test('group: two players sharing one PS5 bill the 2-controller ₹300 once',
-      () async {
-    await arena(ist(2026, 10, 2, 18, 0), keepPads: true); // HEX's 2 pads
-    final actions = container.read(groupSessionActionsProvider);
-    final groups = container.read(groupSessionRepositoryProvider);
-    final customer =
-        await container.read(customerRepositoryProvider).create(name: 'Asha');
-    final draft = GroupSessionDraft(
-      primaryCustomerId: customer.id,
-      playerCount: 2,
-      purchasedControllerCount: 2,
-      durationMinutes: 60,
-      players: [
-        for (final p in [1, 2])
-          GroupPlayerDraft(
-            playerNumber: p,
-            resourceId: 'hex',
-            resourceName: 'HEX',
-            activityCode: 'PS5',
-            gameId: 'g_wwe',
-            controllerCount: 1,
-          ),
-      ],
-    );
-    final preview = await actions.previewCreate(draft);
-    expect(preview.valueOrNull?.estimate, const Paise(30000),
-        reason: preview.failureOrNull?.display);
-    final created = await actions.create(draft);
-    expect(created.isOk, isTrue, reason: created.failureOrNull?.display);
-
-    clock.advance(const Duration(hours: 1));
-    final now = clock.now();
-    final g = (await groups.activeGroups()).single;
-    expect(actions.liveBill(g, now).total, const Paise(30000));
-    expect(actions.endSummary(g, at: now).total, const Paise(30000));
-
-    final ended = await actions.end(g, at: now);
-    expect(ended.isOk, isTrue, reason: ended.failureOrNull?.display);
-    expect(ended.valueOrNull!.billedAmountPaise, 30000);
-
-    final paid = await actions.recordPayment(RecordGroupPaymentCommand(
-      groupId: g.group.id,
-      amountPaise: 30000,
-      method: PaymentMethod.upi,
-    ));
-    expect(paid.isOk, isTrue, reason: paid.failureOrNull?.display);
-    final payments = await groups.paymentsFor(g.group.id);
-    expect(payments.fold<int>(0, (a, p) => a + p.amountPaise), 30000);
   });
 }

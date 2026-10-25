@@ -8,7 +8,10 @@ import 'package:arena_ops/core/clock/clock.dart';
 import 'package:arena_ops/domain/entities/customer.dart';
 import 'package:arena_ops/domain/repositories/commands.dart';
 import 'package:arena_ops/domain/value/enums.dart';
-import 'package:arena_ops/features/reports/application/today_report.dart';
+import 'package:arena_ops/app/providers/core_providers.dart';
+import 'package:arena_ops/core/time/ist.dart';
+import 'package:arena_ops/domain/reports/report_models.dart';
+import 'package:arena_ops/features/reports/application/reports_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -74,12 +77,12 @@ void main() {
     expect((await repo.getById(session.id))!.paymentStatus, PaymentStatus.paid);
 
     // DAILY REPORT.
-    final summary = await container.read(todaySummaryProvider.future);
+    final summary = await container.read(reportForRangeProvider(
+        ReportRange.today(IstDate.fromUtc(container.read(clockProvider).now()))).future);
     expect(summary.billedPaise, 42000);
     expect(summary.collectedPaise, 42000);
     expect(summary.pendingPaise, 0);
-    expect(summary.sessions, 1);
-    expect(summary.activeNow, 0);
+    expect(summary.sessionCount, 1);
     expect(summary.gamingMinutes, 90);
   });
 }

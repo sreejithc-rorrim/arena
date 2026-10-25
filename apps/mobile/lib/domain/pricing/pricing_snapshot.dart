@@ -45,7 +45,7 @@ class PricingSnapshot {
   /// order (priority, name, id). Empty for an arena without rules.
   final List<PricingRule> rules;
 
-  /// The rule that prices [activityCode] for a session (or group) started at
+  /// The rule that prices [activityCode] for a session started at
   /// [at], or null (`_pr_rule`).
   PricingRule? ruleFor(String activityCode, DateTime at) => matchRule(rules,
       activityCode: activityCode, at: at, holidays: holidays);
@@ -80,7 +80,7 @@ class PricingSnapshot {
   }
 
   /// The server's `_pricing_snapshot` shape (compared via `_pricing_canon` at
-  /// session.start / group.create). `rules` is present only when there are
+  /// session.start). `rules` is present only when there are
   /// any, exactly like the server, so a rule-free arena's snapshot is the one
   /// older builds produced.
   Map<String, dynamic> toJson() => {

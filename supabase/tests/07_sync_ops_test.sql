@@ -4,8 +4,7 @@
 --   HEX runs HEX-1, HEX-2 + VOID-1, VOID-2 (borrowed). A new customer wants VOID:
 --   VOID-1/2 cannot be allocated again; GHOST pads can be borrowed; when the
 --   venue runs out the op is refused with a clear code; ending keeps the
---   allocation + return history. Then the same invariant for groups, count-only
---   sessions, permissions, idempotency, stale writes, check-in and the feed.
+--   allocation + return history. Then count-only sessions, permissions, idempotency, stale writes, check-in and the feed.
 begin;
 create extension if not exists pgtap;
 select * from no_plan();
@@ -257,54 +256,6 @@ select is(pg_temp.push('session.start', pg_temp.start(
     'aaaaaaaa-0000-0000-0000-000000000007','bbbbbbbb-0000-0000-0000-000000000007','VOID', 0, '[]',
     '[]', 'Tekken 8', 'b0000000-0000-0000-0000-000000000001'))->>'error', 'booking_not_open',
   'a second device checking in the same booking is refused');
-
--- ------------------------------------------- 11. groups follow the same invariant
-select is(pg_temp.push('group.create', jsonb_build_object('id','99999999-0000-0000-0000-000000000001',
-    'primary_customer_id','cccccccc-0000-0000-0000-000000000001','player_count',2,
-    'purchased_controller_count',2,'started_at','2026-10-01T11:00:00Z',
-    'scheduled_end_at','2026-10-01T12:00:00Z','pricing_snapshot',_pricing_snapshot('e0000000-0000-4000-8000-000000000007'::uuid),'billing_mode','per_system',
-    'assignments', jsonb_build_array(jsonb_build_object('id','98000000-0000-0000-0000-000000000001',
-      'player_number',1,'idx',0,'resource_id', pg_temp.r('HEX'),'activity_code','PS5',
-      'game_id', pg_temp.g('EA SPORTS FC 25'),'controller_count',1,'allocations','[]'::jsonb,
-      'moves','[]'::jsonb))))->>'error', 'resource_busy', 'a group cannot take HEX while HEX runs');
-select is(pg_temp.push('group.create', jsonb_build_object('id','99999999-0000-0000-0000-000000000001',
-    'primary_customer_id','cccccccc-0000-0000-0000-000000000001','player_count',2,
-    'purchased_controller_count',2,'started_at','2026-10-01T11:00:00Z',
-    'scheduled_end_at','2026-10-01T12:00:00Z','pricing_snapshot',_pricing_snapshot('e0000000-0000-4000-8000-000000000007'::uuid),'billing_mode','per_system',
-    'assignments', jsonb_build_array(
-      jsonb_build_object('id','98000000-0000-0000-0000-000000000001','player_number',1,'idx',0,
-        'resource_id', pg_temp.r('VOID'),'activity_code','PS5','game_id', pg_temp.g('EA SPORTS FC 25'),
-        'controller_count',1,'allocations', jsonb_build_array(pg_temp.pad('a9000000-0000-0000-0000-000000000001','GHOST-2')),
-        'moves','[]'::jsonb),
-      jsonb_build_object('id','98000000-0000-0000-0000-000000000002','player_number',2,'idx',0,
-        'resource_id', pg_temp.r('VOID'),'activity_code','PS5','game_id', pg_temp.g('EA SPORTS FC 25'),
-        'controller_count',1,'allocations', jsonb_build_array(pg_temp.pad('a9000000-0000-0000-0000-000000000002','HEX-1')),
-        'moves', jsonb_build_array(pg_temp.pad('dd900000-0000-0000-0000-000000000002','HEX-1'))))))
-    ->>'error', 'controller_taken', 'a group player cannot borrow HEX-1 (held by HEX)');
-select is((select count(*)::int from group_sessions where arena_id = 'e0000000-0000-4000-8000-000000000007'::uuid), 0, 'refused group left nothing behind');
-select is(pg_temp.push('group.create', jsonb_build_object('id','99999999-0000-0000-0000-000000000001',
-    'primary_customer_id','cccccccc-0000-0000-0000-000000000001','player_count',1,
-    'purchased_controller_count',1,'started_at','2026-10-01T11:00:00Z',
-    'scheduled_end_at','2026-10-01T12:00:00Z','pricing_snapshot',_pricing_snapshot('e0000000-0000-4000-8000-000000000007'::uuid),'billing_mode','per_system',
-    'assignments', jsonb_build_array(
-      jsonb_build_object('id','98000000-0000-0000-0000-000000000001','player_number',1,'idx',0,
-        'resource_id', pg_temp.r('VOID'),'activity_code','PS5','game_id', pg_temp.g('EA SPORTS FC 25'),
-        'controller_count',1,'allocations', jsonb_build_array(pg_temp.pad('a9000000-0000-0000-0000-000000000001','GHOST-2')),
-        'moves','[]'::jsonb))))->>'status', 'applied', 'a group player uses GHOST-2 (already at VOID)');
-select is(pg_temp.push('group.end', jsonb_build_object('group_id','99999999-0000-0000-0000-000000000001',
-    'ended_at','2026-10-01T11:30:00Z','billed_amount_paise', 6000,
-    'expected_assignment_ids', jsonb_build_array('98000000-0000-0000-0000-000000000001'),
-    'expected_scheduled_end_at','2026-10-01T12:00:00Z',
-    'charges', jsonb_build_array(jsonb_build_object('id','c9000000-0000-0000-0000-000000000001',
-      'assignment_id','98000000-0000-0000-0000-000000000001','player_number',1,'charge_index',0,
-      'band_code','standard','activity_code','PS5','resource_id', pg_temp.r('VOID'),'controller_count',1,
-      'segment_start','2026-10-01T11:00:00Z','segment_end','2026-10-01T11:30:00Z',
-      'played_minutes',30,'billed_minutes',30,'unit_minutes',60,'unit_price_paise',12000,
-      'amount_paise',6000))))->>'status', 'applied',
-  'group ends');
-select is((select count(*)::int from controller_allocations
-            where group_id = '99999999-0000-0000-0000-000000000001' and ended_at is null), 0,
-  'group end released its pad');
 
 -- ------------------------------------------- 12. owner void releases pads
 select pg_temp.as_user('11111111-1111-1111-1111-111111111111');

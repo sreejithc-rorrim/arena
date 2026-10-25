@@ -31,8 +31,7 @@ Drift migrates the file the instant `AppDatabase` opens it. Each launch:
    can be missing the last sessions and payments);
 2. checkpoints the WAL into the copy, so a backup is one self-contained file;
 3. runs `PRAGMA integrity_check` and reads back the row counts of `sessions`,
-   `session_segments`, `payments`, `group_sessions`, `group_payments`,
-   `bookings`, `customers`, `users`;
+   `session_segments`, `payments`, `bookings`, `customers`, `users`;
 4. keeps the copy only if it verified, de-duplicating against an identical
    existing backup;
 5. prunes to the newest 10, **never** pruning the newest backup of each distinct

@@ -128,8 +128,7 @@ begin
   -- A discount (preset, coupon or manual) comes off the subtotal before cash rounding.
   if jsonb_typeof(p->'discount') = 'object' then
     if v_waive then raise exception 'invalid_discount' using hint = 'a waived bill takes no discount'; end if;
-    v_disc := _discount_apply(p_arena, p->'discount', v_bill, v_ended,
-      v_session, null);
+    v_disc := _discount_apply(p_arena, p->'discount', v_bill, v_ended, v_session);
     select _pr_policy(pricing_snapshot) into pol from sessions where id = v_session;
     v_total := _pr_money((v_bill->>'subtotal')::bigint - v_disc, (pol->>'money_rounding_paise')::int,
       pol->>'money_rounding_dir');

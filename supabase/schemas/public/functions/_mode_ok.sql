@@ -1,7 +1,7 @@
 -- _mode_ok(p_arena, p_resource, p_activity) — refuse an activity the station is not in mode for.
 --
 -- Raises 'mode_locked' (hint: the current mode) when resources.current_mode is set and differs
--- from p_activity; a null mode or missing station passes. Used by _single_supply and _group_assignable.
+-- from p_activity; a null mode or missing station passes. Used by _single_supply.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._mode_ok (
   p_arena    uuid,

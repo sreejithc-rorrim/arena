@@ -1,7 +1,7 @@
 /// A waive writes money off, so it always says why: the action layer refuses
 /// one without a reason (the session keeps running and nothing is sent), and
 /// with one the end op sent to the server carries it, which audits it with the
-/// amount written off (op_session_end / op_group_end, audit action `waive`).
+/// amount written off (op_session_end, audit action `waive`).
 library;
 
 import 'dart:convert';
@@ -12,7 +12,6 @@ import 'package:arena_ops/data/local/database.dart';
 import 'package:arena_ops/data/local/local_booking_repository.dart';
 import 'package:arena_ops/data/local/local_catalog_repository.dart';
 import 'package:arena_ops/data/local/local_customer_repository.dart';
-import 'package:arena_ops/data/local/local_group_session_repository.dart';
 import 'package:arena_ops/data/local/local_session_repository.dart';
 import 'package:arena_ops/data/local/seed_data.dart';
 import 'package:arena_ops/data/sync/sync_recorder.dart';
@@ -50,7 +49,6 @@ void main() {
     sessions = LocalSessionRepository(db, clock, recorder);
     actions = SessionActions(
       sessions: sessions,
-      groups: LocalGroupSessionRepository(db, clock, recorder),
       catalog: LocalCatalogRepository(db),
       bookings: LocalBookingRepository(db, clock),
       clock: clock,

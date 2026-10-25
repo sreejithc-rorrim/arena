@@ -2,7 +2,7 @@
 --
 -- Permission: settings.
 -- Payload: id.
--- A type no session, group player, charge, pad allocation or booking ever
+-- A type no session, charge, pad allocation or booking ever
 -- referred to is deleted with its prices and station links (devices get the
 -- tombstones). A type with any such history is retired instead (active =
 -- false), so past bills keep it. Either way any station mode lock on it is
@@ -46,9 +46,7 @@ begin
    where arena_id = p_arena and current_mode = v_code;
 
   if exists (select 1 from session_segments where arena_id = p_arena and activity_code = v_code)
-     or exists (select 1 from group_assignments where arena_id = p_arena and activity_code = v_code)
      or exists (select 1 from session_charges where arena_id = p_arena and activity_code = v_code)
-     or exists (select 1 from group_charges where arena_id = p_arena and activity_code = v_code)
      or exists (select 1 from controller_allocations where arena_id = p_arena and activity_code = v_code)
      or exists (select 1 from bookings where arena_id = p_arena and activity_id = v_id) then
     update activities set active = false, updated_at = statement_timestamp() where id = v_id;

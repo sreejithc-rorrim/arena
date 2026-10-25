@@ -6,7 +6,7 @@
 --   stored status, so a rename made on an old copy never puts a station back in service or takes
 --   it out), sort_order?, activity_codes[] (exactly the types it offers; unlisted links are
 --   deleted).
--- A status change to anything but available is refused while a session or group player is on the
+-- A status change to anything but available is refused while a session is on the
 -- station (resource_busy), as resource.set_status does; the station row is locked first.
 -- Checks / errors: forbidden; not_found (id belongs to another arena); resource_busy; duplicate
 --   (name taken); activity_missing; constraint failures map to invalid.
@@ -32,10 +32,8 @@ begin
   select status into v_old from resources where id = v_id and arena_id = p_arena;
   if found and p ? 'status' and (p->>'status') is distinct from v_old
      and (p->>'status') is distinct from 'available'
-     and (exists (select 1 from session_segments
-                   where arena_id = p_arena and resource_id = v_id and ended_at is null)
-          or exists (select 1 from group_assignments
-                      where arena_id = p_arena and resource_id = v_id and ended_at is null)) then
+     and exists (select 1 from session_segments
+                  where arena_id = p_arena and resource_id = v_id and ended_at is null) then
     raise exception 'resource_busy' using hint = 'in use';
   end if;
   insert into resources(id, arena_id, name, kind, status, sort_order)

@@ -1,11 +1,11 @@
 -- Sales corrections and audit (staff handover audit, 2026-10-14):
---   * a void needs a reason (session and group), trimmed, at most 500 characters;
+--   * a void needs a reason, trimmed, at most 500 characters;
 --   * money collected before a void can be refunded (never more than collected), while a
 --     voided bill takes no new payment;
 --   * a waive writes an audit entry with the amount written off and the staff reason;
 --   * payment.correct moves all or part of a payment to the method it was really taken by, as
 --     an append-only refund + payment pair (money permission, reason required, audited, never
---     more than the payment, replay-safe), on single and group bills;
+--     more than the payment, replay-safe);
 --   * arena_sales / arena_sale carry what the dashboard's report needs (returning customer,
 --     player-minutes, payments ledger, who/when of the void, server receipt time, history), and
 --     every bill's per-method nets and ledger add up to its collected amount.
@@ -99,26 +99,6 @@ create function pg_temp.correct(p_scope text, p_parent text, p_payment text, p_m
   select pg_temp.push('payment.correct', jsonb_strip_nulls(jsonb_build_object('scope', p_scope,
     'parent_id', p_parent, 'payment_id', p_payment, 'method', p_method,
     'amount_paise', p_amount, 'reason', p_reason))) $$ language sql;
-create function pg_temp.group_(p_id text, p_asg text, p_res text, p_from text, p_to text) returns jsonb as $$
-  select pg_temp.push('group.create', jsonb_build_object('id', p_id,
-    'primary_customer_id','cccccccc-0000-0000-0000-000000000022', 'player_count', 1,
-    'purchased_controller_count', 1, 'started_at', p_from, 'scheduled_end_at', p_to,
-    'pricing_snapshot', _pricing_snapshot('e0000000-0000-4000-8000-000000000220'::uuid),
-    'billing_mode','per_system', 'assignments', jsonb_build_array(jsonb_build_object(
-      'id', p_asg::uuid, 'player_number', 1, 'idx', 0, 'resource_id', pg_temp.r(p_res),
-      'activity_code', 'PS5', 'controller_count', 1,
-      'allocations','[]'::jsonb, 'moves','[]'::jsonb)))) $$ language sql;
-create function pg_temp.group_end(p_id text, p_asg text, p_res text, p_from text, p_to text,
-    p_waive boolean, p_reason text default null) returns jsonb as $$
-  select pg_temp.push('group.end', jsonb_build_object('group_id', p_id,
-    'ended_at', p_to, 'billed_amount_paise', 12000, 'mark_waived', p_waive,
-    'waive_reason', p_reason,
-    'expected_assignment_ids', jsonb_build_array(p_asg), 'expected_scheduled_end_at', p_to,
-    'charges', jsonb_build_array(jsonb_build_object('id', gen_random_uuid(),
-      'player_number', 1, 'charge_index', 0, 'band_code', 'standard', 'activity_code', 'PS5',
-      'resource_id', pg_temp.r(p_res), 'controller_count', 1,
-      'segment_start', p_from, 'segment_end', p_to, 'played_minutes', 60, 'billed_minutes', 60,
-      'unit_minutes', 60, 'unit_price_paise', 12000, 'amount_paise', 12000)))) $$ language sql;
 create function pg_temp.sales() returns jsonb as $$
   select arena_sales('e0000000-0000-4000-8000-000000000220'::uuid,
     '2026-10-01T00:00:00Z'::timestamptz, '2026-10-02T00:00:00Z'::timestamptz) $$ language sql;
@@ -133,8 +113,6 @@ create function pg_temp.methods(p_id text) returns jsonb as $$
 -- A: HEX 09:00–10:00Z, 2 pads, ₹220, Kiran, paid ₹220 cash (really GPay: corrected below).
 -- B: GHOST 10:00–11:00Z, 1 pad, ₹120, Kiran again, paid ₹120 UPI, then voided and refunded.
 -- W: RIFT 09:00–10:00Z, 1 pad, ₹120, a walk-in, ₹20 cash then waived ("Birthday treat").
--- G: group on VOID 09:00–10:00Z, ₹120, paid ₹120 cash (really card: corrected below).
--- H: group on VOID 10:00–11:00Z, ₹120, waived ("Walked out"; refused without a reason).
 select pg_temp.as_user('22000000-0000-0000-0000-000000000002');
 select is(pg_temp.push('customer.create', jsonb_build_object(
     'id','cccccccc-0000-0000-0000-000000000022','name','Kiran','phone','9800002222',
@@ -172,21 +150,6 @@ select is(pg_temp.end_('a2200000-0000-0000-0000-0000000000c1', 'b2200000-0000-00
     'RIFT', '2026-10-01T09:00:00Z', '2026-10-01T10:00:00Z', 12000, 1, true, '  Birthday treat ')
     ->'result'->>'payment_status', 'waived', 'W ends waived, with a reason');
 
-select is(pg_temp.group_('92200000-0000-0000-0000-000000000001', '93200000-0000-0000-0000-000000000001',
-    'VOID', '2026-10-01T09:00:00Z', '2026-10-01T10:00:00Z')->>'status', 'applied', 'G starts on VOID');
-select is(pg_temp.group_end('92200000-0000-0000-0000-000000000001', '93200000-0000-0000-0000-000000000001',
-    'VOID', '2026-10-01T09:00:00Z', '2026-10-01T10:00:00Z', false)->>'status', 'applied', 'G ends at ₹120');
-select is(pg_temp.pay('group', '92200000-0000-0000-0000-000000000001',
-    'd2200000-0000-0000-0000-0000000000a1', 12000, 'cash')->>'status', 'applied', 'G: ₹120 cash');
-select is(pg_temp.group_('92200000-0000-0000-0000-000000000002', '93200000-0000-0000-0000-000000000002',
-    'VOID', '2026-10-01T10:00:00Z', '2026-10-01T11:00:00Z')->>'status', 'applied', 'H starts on VOID');
-select is(pg_temp.group_end('92200000-0000-0000-0000-000000000002', '93200000-0000-0000-0000-000000000002',
-    'VOID', '2026-10-01T10:00:00Z', '2026-10-01T11:00:00Z', true, '  ')->>'error', 'waive_reason_required',
-  'a waive without a reason is refused');
-select is(pg_temp.group_end('92200000-0000-0000-0000-000000000002', '93200000-0000-0000-0000-000000000002',
-    'VOID', '2026-10-01T10:00:00Z', '2026-10-01T11:00:00Z', true, 'Walked out')->'result'->>'payment_status', 'waived',
-  'H ends waived, with a reason');
-
 -- ---------------------------------------------------------------- waives are audited
 select is((select (reason, before, after)::text from audit_log
             where entity_id = 'a2200000-0000-0000-0000-0000000000c1' and action = 'waive'),
@@ -196,12 +159,9 @@ select is((select (reason, before, after)::text from audit_log
 select is((select created_by::text from audit_log
             where entity_id = 'a2200000-0000-0000-0000-0000000000c1' and action = 'waive'),
   '22000000-0000-0000-0000-000000000002', 'recorded as the staff member who waived it');
-select is((select (entity_type, reason, after->>'written_off_paise')::text from audit_log
-            where entity_id = '92200000-0000-0000-0000-000000000002' and action = 'waive'),
-  '(group_session,"Walked out",12000)', 'H''s waive is audited too, with its reason and ₹120 written off');
 select is((select count(*)::int from audit_log
-            where arena_id = 'e0000000-0000-4000-8000-000000000220' and action = 'waive'), 2,
-  'only the two waived bills have a waive entry');
+            where arena_id = 'e0000000-0000-4000-8000-000000000220' and action = 'waive'), 1,
+  'only the waived bill has a waive entry');
 
 -- ---------------------------------------------------------------- a void needs a reason
 select pg_temp.as_user('22000000-0000-0000-0000-000000000001');
@@ -213,8 +173,6 @@ select is(pg_temp.push('session.void', jsonb_build_object('session_id','a2200000
     'reason', repeat('x', 501)))->>'error', 'reason_too_long', 'and a reason over 500 characters');
 select is((select status from sessions where id = 'a2200000-0000-0000-0000-00000000000b'), 'completed',
   'B is untouched by the refused voids');
-select is(pg_temp.push('group.void', jsonb_build_object('group_id','92200000-0000-0000-0000-000000000002'))
-    ->>'error', 'void_reason_required', 'a group void with no reason is refused');
 select is(pg_temp.push('session.void', jsonb_build_object('session_id','a2200000-0000-0000-0000-00000000000b',
     'reason', '  Duplicate bill '))->>'status', 'applied', 'the owner voids B with a reason');
 select is((select void_reason from sessions where id = 'a2200000-0000-0000-0000-00000000000b'),
@@ -301,20 +259,13 @@ select is(pg_temp.correct('single', 'a2200000-0000-0000-0000-00000000000a',
 select is(pg_temp.correct('single', 'a2200000-0000-0000-0000-00000000000a',
     'e2200000-0000-0000-0000-000000000001', 'card', null, 'x')->>'error', 'not_a_payment',
   'a refund row cannot be moved');
-select is(pg_temp.correct('group', '92200000-0000-0000-0000-000000000001',
-    'd2200000-0000-0000-0000-0000000000a1', 'card', null, 'Card machine, not cash')->>'status', 'applied',
-  'a group payment is corrected the same way');
-select is(pg_temp.methods('92200000-0000-0000-0000-000000000001'),
-  '{"card": 12000, "cash": 0}'::jsonb, 'G is all card');
-select is((select count(*)::int from group_payments where group_id = '92200000-0000-0000-0000-000000000001'), 3,
-  'G: the original, a refund and a payment');
 select ok(not has_function_privilege('authenticated', 'op_payment_correct(uuid,jsonb)', 'EXECUTE')
        and not has_function_privilege('anon', 'op_payment_correct(uuid,jsonb)', 'EXECUTE'),
   'the op is reachable only through sync_push');
 
 -- ---------------------------------------------------------------- what the dashboard reads
 select pg_temp.as_user('22000000-0000-0000-0000-000000000001');
-select is(jsonb_array_length(pg_temp.sales()), 5, 'the day lists A, B, W, G and H');
+select is(jsonb_array_length(pg_temp.sales()), 3, 'the day lists A, B and W');
 select is((select (b->>'returning', b->>'players', b->>'player_minutes', b->>'voided_at' is null)::text
              from pg_temp.bill('a2200000-0000-0000-0000-00000000000a') b),
   '(false,2,120,t)', 'A: Kiran''s first visit, 2 players, 120 player-minutes, not voided');
@@ -330,11 +281,6 @@ select ok((select (b->>'voided_at')::timestamptz is not null and (b->>'recorded_
 select is((select (b->>'returning', b->>'guest', b->>'payment_status')::text
              from pg_temp.bill('a2200000-0000-0000-0000-0000000000c1') b),
   '(false,true,waived)', 'W: a walk-in is never "returning"');
-select is((select (pg_temp.bill('92200000-0000-0000-0000-000000000001')->>'returning')
-               || ',' || (pg_temp.bill('92200000-0000-0000-0000-000000000002')->>'returning')),
-  'false,true', 'groups: Kiran''s group at 09:00 is not returning, the one at 10:00 is');
-select is((select pg_temp.bill('92200000-0000-0000-0000-000000000002')->>'player_minutes'), '60',
-  'H: one player for an hour');
 -- (The two rows of one correction share a timestamp; within it, the refund is listed first here.)
 select is((select string_agg((e->>'method') || ':' || (e->>'amount_paise') || ':' || (e->>'refund')
                              || ':' || (e->>'correction') || ':' || coalesce(e->>'by', '-'), ','
@@ -362,10 +308,8 @@ select is((select count(*)::int from jsonb_array_elements(pg_temp.sales()) b
                          where (e->>'correction')::boolean)), 0,
   'for every bill: methods = ledger = collected; refunds = non-correction negative rows; corrections net to 0');
 select is((select sum((b->>'paid_paise')::bigint)::int from jsonb_array_elements(pg_temp.sales()) b),
-  (select ((select coalesce(sum(amount_paise), 0) from payments
-             where arena_id = 'e0000000-0000-4000-8000-000000000220')
-          + (select coalesce(sum(amount_paise), 0) from group_payments
-             where arena_id = 'e0000000-0000-4000-8000-000000000220'))::int),
+  (select coalesce(sum(amount_paise), 0)::int from payments
+    where arena_id = 'e0000000-0000-4000-8000-000000000220'),
   'the day''s collected (all bills) equals the raw payments ledger');
 
 select is((select string_agg((h->>'action') || ':' || coalesce(h->>'by', '-') || ':'

@@ -47,8 +47,10 @@ SyncEngine ── sync_push(arena, ops, device) ──► sync_ops ledger ─►
 Every bill a device pushes is priced again on the server. An op whose money
 does not match is refused (`price_mismatch`), so the device keeps the session
 open and Sync shows the reason. Migration
-`0013_server_pricing.sql` ports `PricingService`, `SegmentBilling` and
-`GroupBilling` to plpgsql (`_pr_quote`, `_pr_session_bill`, `_pr_group_bill`).
+`0013_server_pricing.sql` ports `PricingService` and `SegmentBilling` to
+plpgsql (`_pr_quote`, `_pr_session_bill`). Group sessions were removed on
+2026-10-24 (migration `20261024131855_remove_group_sessions`), to be rebuilt
+from scratch; `group.*` ops are refused as `unknown_op`.
 
 **Why re-price instead of a tolerance check.** The engine uses only integer
 paise with fixed rounding rules, so the server can reach the device's exact
@@ -59,9 +61,9 @@ would also hide a porting bug. The tolerance is therefore **0 paise**.
 
 | Op | Check |
 |---|---|
-| `session.start`, `group.create` | `pricing_snapshot` must equal the arena's price list (rates, activities, policy, opening hours, holidays, closures, active pricing rules). That is the live list, or one an owner replaced in the last 72 h, which covers a device that went offline holding the old list. Card name and ordering are ignored. A group's `billing_mode` must be the snapshot policy's. Otherwise the op is refused with `pricing_snapshot_mismatch`. Without this check, a forged ₹0 price list would get past re-pricing. |
-| `session.end`, `group.end` | The server prices the segments/assignments it holds, using the stored snapshot and the end time. `billed_amount_paise` must equal the server total. The charge rows must match the server's rows as a multiset on activity, station, controllers, band, start, end, played/billed minutes, unit, unit price and amount; ids and order are ignored. The end may not come before the start of the open segment or assignment. |
-| `session.extend`, `group.extend` | `added_amount_paise` must equal what the device's planner computes. For a single session that is the money-rounded quote over the open segment's config, from the session start to the new end, minus the same quote to the old end. For a group it is the unrounded group subtotal at the new end minus the subtotal at the old end. |
+| `session.start` | `pricing_snapshot` must equal the arena's price list (rates, activities, policy, opening hours, holidays, closures, active pricing rules). That is the live list, or one an owner replaced in the last 72 h, which covers a device that went offline holding the old list. Card name and ordering are ignored. Otherwise the op is refused with `pricing_snapshot_mismatch`. Without this check, a forged ₹0 price list would get past re-pricing. |
+| `session.end` | The server prices the segments it holds, using the stored snapshot and the end time. `billed_amount_paise` must equal the server total. The charge rows must match the server's rows as a multiset on activity, station, controllers, band, start, end, played/billed minutes, unit, unit price and amount; ids and order are ignored. The end may not come before the start of the open segment. |
+| `session.extend` | `added_amount_paise` must equal what the device's planner computes: the money-rounded quote over the open segment's config, from the session start to the new end, minus the same quote to the old end. |
 | waived ends | Priced and checked exactly like any other end. Waiving changes only `payment_status` and still needs `discount`. |
 
 Verification runs after the 0011 op body. Permission, stale and floor
@@ -72,7 +74,7 @@ back through the op's savepoint.
 
 * There is one price band (standard): every interval is priced as one line.
   Happy hours and other time-of-day prices are pricing rules (below), judged
-  once at the session's (group's) start; nothing is split at a window edge.
+  once at the session's start; nothing is split at a window edge.
 * Grace: a session or segment of `≤ grace` minutes is free. Minimum charge
   extends the *billed* interval, so a charge row may end after the session.
   Played minutes still count only actual time.
@@ -82,15 +84,12 @@ back through the op's savepoint.
 * Rounding scope `session` rounds each priced interval once, using the exact
   numerator over a common denominator. Rounding scope `segment`, or mixed
   denominators, sums the per-piece paise. Cash rounding (to nearest or up)
-  applies once to the session or group total.
+  applies once to the session total.
 * Policy applies **per segment**, which is option A in
   [billing-segment-policy.md](billing-segment-policy.md). If the owner picks
   option B, the Dart engine and `_pr_*` must change together.
 * A segment with no rate in the snapshot contributes nothing on both sides
   (the End screen warns staff).
-* Groups: a per-system sweep splits at every controller-count change. In
-  pooled mode the purchased count is priced once over the group window, and
-  stretches without controllers are still billed per system.
 * `early_exit` / `late_arrival = planned` are stored but not used by the app's
   billing. Both sides bill actual time.
 
@@ -101,22 +100,20 @@ times are in order, but it cannot tell whether those times are true. So
 server-side amount validation is **not** protection against forged or wrong
 timestamps: a member with `bill` and direct API access could, for example,
 send an end time earlier than the real one and the correctly-priced, smaller
-bill for it. What bounds it (`_client_time`): every session and group time
-(start, switch, add, end) is refused when later than the server's time plus
+bill for it. What bounds it (`_client_time`): every session time
+(start, switch, end) is refused when later than the server's time plus
 2 minutes (`time_in_future`) or older than the arena's offline window
 (`time_too_old`; settings key `offline_rules`, `max_offline_hours` 1–720,
 default 24). Inside the window the server keeps its own receipt time
-(`sessions.created_at` / `ended_recorded_at`, the same on `group_sessions`), and
+(`sessions.created_at` / `ended_recorded_at`), and
 the dashboard flags a start recorded over 5 minutes late and an end recorded
 over 15 minutes late. Who sent it stays on `created_by` / `sync_ops.user_id`.
-In pooled group mode the purchased controller count is also staff's
-declaration.
 
 ### Changing pricing (rule)
 
 The server's `_pr_*` functions are a hand port of the Dart engine. **Any change
 to how the app prices** — `lib/domain/pricing/`, `lib/domain/services/
-segment_billing.dart`, `group_billing.dart`, `session_planner.dart` (extension
+segment_billing.dart`, `session_planner.dart` (extension
 cost), `lib/core/money/`, the IST/business calendar in `lib/core/time/`, or the
 `BillingPolicy` knobs — **must ship together with**:
 
@@ -140,7 +137,7 @@ dashboard; the floor app does not send them yet.
 
 * **Time rules.** `_pricing_snapshot` / `_pricing_canon` carry `rules` only
   while the arena has an active rule, so an arena without rules is priced and
-  validated exactly as before. A rule is judged at the session's (group's)
+  validated exactly as before. A rule is judged at the session's
   start in IST — weekday, whole minute of day (seconds dropped) in
   `[start_min, end_min)`, holiday
   mode, dates, type — and the first by priority changes every unit price of
@@ -148,11 +145,11 @@ dashboard; the floor app does not send them yet.
   `collate "C"`; `_pr_rule`, `_pr_rule_price`; percent is
   round-half-up, rupees per hour are pro rata to the rate's unit, half toward
   +∞, never below 0). **Once an arena has an active rule, a floor app built
-  before rule support is refused at `session.start` / `group.create`
+  before rule support is refused at `session.start`
   (`pricing_snapshot_mismatch`)**: release the server and the floor app
   together. The floor app pulls `pricing_rules` into Drift (schema v16, which
   also rewinds the pull cursor once so rules sent before the upgrade arrive).
-* **Discounts.** `session.end` / `group.end` take an optional `discount`
+* **Discounts.** `session.end` takes an optional `discount`
   (preset, coupon by code, or manual) validated and recorded by
   `_discount_apply`; billed = cash-rounded (subtotal − discount). An end
   without a discount behaves as before, so older floor apps keep working.
@@ -180,7 +177,7 @@ dashboard; the floor app does not send them yet.
   in a later page.
 * **Games: archive vs delete.** An archived game (`games.active = false`) stays
   on the device for history but is offered nowhere (new session, change game,
-  group, booking pickers read active games only). A game edit from the device
+  booking pickers read active games only). A game edit from the device
   sends `base_active` (the flag it held), so a queued edit never undoes an
   archive or restore made elsewhere: the server refuses it as `stale` and the
   device converges on the server's catalog. A station-status save sends only the
@@ -205,12 +202,11 @@ dashboard; the floor app does not send them yet.
   * **No business data travels in Realtime.** Every event only triggers a pull
     (floor app, `lib/data/sync/realtime_sync.dart`, debounced) or a store
     refetch (dashboard) through the normal authorized queries.
-  * Published tables (`supabase/schemas/_cluster/publications.sql`, 33):
+  * Published tables (`supabase/schemas/_cluster/publications.sql`, 28):
     accessory_kinds, activities, bill_discounts, billing_policies, bookings,
     controller_allocations, controller_moves, controllers, customers,
     discounts, game_categories, game_controls, game_resources, games,
-    group_assignments, group_charges, group_extensions, group_payments,
-    group_sessions, holidays, payments, pricing_rules, rate_bands, rate_cards,
+    holidays, payments, pricing_rules, rate_bands, rate_cards,
     rates, resource_activities, resources, session_charges,
     session_extensions, session_segments, sessions, settings, staff_profiles.
   * The dashboard reloads only what the open screen shows; anything else is
@@ -226,7 +222,7 @@ dashboard; the floor app does not send them yet.
   (Until 2026-10-12 the "push right after a change" never fired — the timer
   was born inside the Drift write transaction and died silently — so changes
   only left on the 10 s poll.)
-* Floor state (sessions, segments, groups, pads, payments, bookings) reaches
+* Floor state (sessions, segments, pads, payments, bookings) reaches
   screens through Drift watch streams. Catalog reads (stations, games,
   activities, price list, names on cards) are one-shot providers; they re-read
   whenever a pass changed local data (`syncRevisionProvider`), so a station
@@ -241,7 +237,7 @@ offline work is **refused** on reconnect, never merged. When that happens:
 1. The op stays in the outbox as `rejected`, with the server's reason and its
    full payload (including any money taken).
 2. The device replaces its copy of the affected entity with the server's.
-   Entities are a session, group, pad, customer or booking; a refused owner edit
+   Entities are a session, pad, customer or booking; a refused owner edit
    replaces the whole catalog. Rows the refused op had written disappear from
    the floor.
 3. The Sync screen (tap the status strip) lists it under *Needs attention* until
@@ -265,9 +261,9 @@ server is the referee for devices working on stale numbers.
 |---|---|---|
 | Once a bill is final, payments may only fill it up to the bill (`overpayment`). A running session's advance payments are not capped. A waived bill is unchanged. | `op_payment` wrapper locks the bill, sums payments | `paymentBalanceProblem` (`lib/domain/services/payment_rules.dart`), checked inside the write transaction |
 | A refund may never exceed what was collected (`refund_exceeds_paid`). | same | same |
-| A void needs a reason (`void_reason_required`, 2026-10-14). A voided bill takes no payment (`voided`, checked before the balance) but may be refunded, so money taken before the void can go back. | `op_session_void`, `op_group_void`, `op_payment` | the floor app never voids; refunds only from the dashboard |
-| A waive writes an `audit_log` entry (amount written off, reason). A waive needs a reason on the server too (`waive_reason_required`), as in the floor app. Below owner level a waive may write off at most `discount_options.manual_max_percent` of the bill (`waive_over_limit`; exact integer check `_waive_check`, mirrored by `waiveOverLimit` on the floor). | `op_session_end`, `op_group_end` | `SessionActions.end` / `GroupSessionActions.end`, end sheets |
-| Overtime: `session.end` / `group.end` carry `charge_overtime` (default false). Without it the bill stops at `scheduled_end_at` (`_pr_session_bill` p_charge_overtime; `_pr_group_bill` / `_pr_sweep` p_until); the floor app prices the same way (`overtimeBillUntil`, `GroupBilling.bill(billUntil)`), and its live price stops at the booked end. | `op_session_end`, `op_group_end` | end sheets (`OvertimeChoice`) |
+| A void needs a reason (`void_reason_required`, 2026-10-14). A voided bill takes no payment (`voided`, checked before the balance) but may be refunded, so money taken before the void can go back. | `op_session_void`, `op_payment` | the floor app never voids; refunds only from the dashboard |
+| A waive writes an `audit_log` entry (amount written off, reason). A waive needs a reason on the server too (`waive_reason_required`), as in the floor app. Below owner level a waive may write off at most `discount_options.manual_max_percent` of the bill (`waive_over_limit`; exact integer check `_waive_check`, mirrored by `waiveOverLimit` on the floor). | `op_session_end` | `SessionActions.end`, end sheet |
+| Overtime: `session.end` carries `charge_overtime` (default false). Without it the bill stops at `scheduled_end_at` (`_pr_session_bill` p_charge_overtime); the floor app prices the same way (`overtimeBillUntil`), and its live price stops at the booked end. | `op_session_end` | end sheet (`OvertimeChoice`) |
 | An end set earlier than when staff ended it (End sheet's "Ended at" picker): `session.end` carries `end_moved {from, reason}`; the server requires the reason (`end_reason_required`), checks `from` is after `ended_at` and within the offline window, and audits `end_moved` with the end and bill before (priced at `from`) and after. | `op_session_end` | `SessionActions.pickedEnd` / `end(endPicked, endReason)`, end sheet |
 | `payment.correct` (dashboard only, Money permission) moves all or part of a payment to another method as a refund + payment pair with a reason; never more than the payment. The device receives the two rows like any payment; they net to zero. | `op_payment_correct` | — |
 | `bill.adjust` (dashboard with Money permission; floor app's My bills with `bill_edit`, only for bills the caller started — `created_by`, else `forbidden` hint 'not your bill'; sent online, no outbox) sets a completed, non-waived bill's total with a reason and records the difference to what was collected as one payment or refund (`method`, note 'Bill edited'), so the bill is paid; audited as `bill_adjust`; charges untouched. It carries `expected_billed_paise` / `expected_paid_paise` (what the caller saw); if the bill's total or net collected differs (a payment or edit landed meanwhile), or they are missing, it is refused as `stale` and the caller reloads. | `op_bill_adjust` | My bills sheet, admin Edit bill |
@@ -387,7 +383,7 @@ unsent work stays in that person's database file and goes after they sign in.
 * Floor app permission checks live in the action controllers: `BookingActions`
   (start), `CatalogActions` (settings; pad loan/return start or settings,
   permanent re-home settings), `CustomerActions` (start or members), plus the
-  session and group actions. The floor "View games" sheet is read-only without
+  session actions. The floor "View games" sheet is read-only without
   settings.
 * The device PIN is device-local and never synced. Cloud mode has no PIN step.
 
@@ -488,7 +484,7 @@ Known limits (by design or not yet built):
   `bill`, `money` or `reports`; customers `start`, `members`, `money` or
   `reports`; `audit_log` owner level; `staff_invites` none), and the device
   feed narrows the same way (`_sync_hidden`; coupons also need `discount` or
-  `settings`), so an attendance-only login receives no customers or money.
+  `settings`), so a login without those permissions receives no customers or money.
   Rows a device already holds when a permission is taken away stay in its
   file until it is reinstalled or the person signs out.
 

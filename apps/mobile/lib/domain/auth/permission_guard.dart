@@ -18,7 +18,8 @@ class PermissionGuard {
   final AppUser? actor;
 
   /// Null when someone active is signed in, otherwise the refusal to return —
-  /// for actions every member may take on their own behalf (clocking in).
+  /// for actions every member may take on their own behalf (their own profile,
+  /// accepting the staff terms).
   Failure? checkSignedIn() {
     final user = actor;
     if (user == null) {
@@ -93,12 +94,7 @@ class PermissionGuard {
         Permission.money => 'see the money screen',
         Permission.reports => 'see reports',
         Permission.settings => 'change settings',
-        Permission.attendanceReview => "see everyone's attendance",
-        Permission.leaveApprove => 'approve leave',
-        Permission.payroll => 'prepare salaries',
-        Permission.payrollFinalise => 'finalise salaries',
         Permission.billEdit => 'edit your bills',
         Permission.billRecord => 'add missed bills',
-        Permission.timeRequest => 'request missed time',
       };
 }

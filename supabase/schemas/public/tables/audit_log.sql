@@ -1,9 +1,8 @@
 -- audit_log — append-only record of sensitive actions and sync-time adjustments
 --
 -- Written by:
---   op_session_void / op_group_void (entity session / group_session, action void,
---     with the owner's required reason);
---   op_session_end / op_group_end on a waive (action waive, the staff reason when
+--   op_session_void (entity session, action void, with the owner's required reason);
+--   op_session_end on a waive (action waive, the staff reason when
 --     given, before {billed_paise, paid_paise}, after {written_off_paise});
 --   op_payment_correct (action payment_correct, the required reason, before
 --     {payment_id, method, amount_paise}, after {method, amount_paise, refund_id,
@@ -36,7 +35,7 @@ comment on table public.audit_log is 'Append-only audit trail of voids, waives, 
 
 comment on column public.audit_log.arena_id is 'Owning arena (tenant); RLS shows the row only to active members of this arena.';
 
-comment on column public.audit_log.entity_type is 'Kind of row acted on, e.g. session, group_session, customer.';
+comment on column public.audit_log.entity_type is 'Kind of row acted on, e.g. session or customer.';
 
 comment on column public.audit_log.entity_id is 'Id of the row acted on (no FK; entity_type names its table).';
 

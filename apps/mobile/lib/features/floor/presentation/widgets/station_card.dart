@@ -8,7 +8,6 @@ import 'package:arena_ops/core/time/duration_format.dart';
 import 'package:arena_ops/core/time/ist.dart';
 import 'package:arena_ops/core/widgets/arena_badge.dart';
 import 'package:arena_ops/domain/entities/booking.dart';
-import 'package:arena_ops/domain/entities/group_session.dart';
 import 'package:arena_ops/domain/entities/resource.dart';
 import 'package:arena_ops/domain/entities/session.dart';
 import 'package:arena_ops/domain/services/session_timer.dart';
@@ -31,8 +30,6 @@ class StationCard extends ConsumerWidget {
     super.key,
     required this.resource,
     this.active,
-    this.group,
-    this.groupAssignment,
     this.nextBooking,
     this.onTap,
     this.onStart,
@@ -45,11 +42,6 @@ class StationCard extends ConsumerWidget {
 
   final Resource resource;
   final ActiveSession? active;
-
-  /// When this station is used by a group, the group and the open assignment on
-  /// it (group feature §7). The shared countdown is driven by [group].
-  final ActiveGroupSession? group;
-  final GroupAssignment? groupAssignment;
 
   /// The next reservation for this resource, if any — drives the "Reserved"
   /// hint on a free card so staff don't start a session into a booking.
@@ -66,77 +58,11 @@ class StationCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final arena = context.arena;
-    if (group != null && groupAssignment != null) {
-      return _groupOccupied(context, ref, arena);
-    }
     if (active != null) return _occupied(context, ref, arena);
     return _free(context, ref, arena);
   }
 
   static final Set<String> _reportedAnomalies = <String>{};
-
-  // --- occupied by a group ---------------------------------------------------
-
-  Widget _groupOccupied(
-    BuildContext context,
-    WidgetRef ref,
-    ArenaColors arena,
-  ) {
-    final g = group!.group;
-    final seg = groupAssignment!;
-    final now = ref.watch(nowProvider).value ?? ref.watch(clockProvider).now();
-    final timer = SessionTimer(
-      startedAt: g.startedAt,
-      scheduledEndAt: g.scheduledEndAt,
-      warnThreshold: ref.watch(warnThresholdProvider),
-    );
-    final anomaly = timer.detectAnomaly(now);
-    if (anomaly != null && _reportedAnomalies.add('${g.id}:$anomaly')) {
-      AppTelemetry.reportTimerAnomaly(
-        sessionId: g.id,
-        anomaly: anomaly,
-        resourceId: seg.resourceId,
-        startedAt: g.startedAt,
-        scheduledEndAt: g.scheduledEndAt,
-      );
-    }
-    final visual = timer.state(now);
-    final (Color accent, String badge) = switch (visual) {
-      SessionVisualState.normal => (arena.stPlaying, 'Group'),
-      SessionVisualState.warning => (arena.stEnding, 'Group · ending'),
-      SessionVisualState.overtime => (arena.stOvertime, 'Group · over'),
-    };
-    final overtime = visual == SessionVisualState.overtime;
-    final game = seg.gameId == null
-        ? null
-        : ref.watch(gameByIdProvider(seg.gameId!)).value;
-    final who = ref.watch(customerByIdProvider(g.primaryCustomerId)).value;
-
-    return _shell(
-      arena: arena,
-      onTap: onTap,
-      borderColor: accent,
-      background: overtime ? arena.stOvertimeBg : arena.surface,
-      pulse: overtime,
-      children: [
-        _headerRow(arena, badge, accent),
-        const SizedBox(height: AppSpacing.md),
-        _timerLine(arena, timer, now, overtime),
-        const SizedBox(height: AppSpacing.sm),
-        _factLine(
-          arena,
-          who == null ? 'Player ${seg.playerNumber}' : who.displayName,
-          'P${seg.playerNumber}',
-        ),
-        _factLine(
-          arena,
-          game?.name ?? seg.activityCode,
-          seg.controllerCount == null ? null : '${seg.controllerCount} ctrl',
-        ),
-        _clockLine(arena, g.startedAt, g.scheduledEndAt),
-      ],
-    );
-  }
 
   // --- occupied by a single session -----------------------------------------
 

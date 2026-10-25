@@ -1,8 +1,8 @@
 -- _pr_keys(q, p_act, p_res, p_cc) — charge keys for every line of a _pr_quote result.
 --
 -- Maps each q->'lines' element through _pr_charge_key; played minutes are played_seconds / 60,
--- truncated. Returns '{}' when there are no lines. Used by _pr_session_bill, _pr_sweep and
--- _pr_group_bill to build the key list checked at session / group end.
+-- truncated. Returns '{}' when there are no lines. Used by _pr_session_bill to build the key
+-- list checked at session end.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._pr_keys (
   q     jsonb,

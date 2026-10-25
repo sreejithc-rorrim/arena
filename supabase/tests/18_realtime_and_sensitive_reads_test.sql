@@ -89,12 +89,12 @@ select is(pg_temp.seen(), '0/0/0/0/0', 'a token without a user sees nothing');
 reset role;
 select set_config('request.jwt.claims', '', true);
 select ok(not has_table_privilege('anon', 'public.' || t, 'select'), 'anon cannot read ' || t)
-from unnest(array['payments', 'group_payments', 'session_charges', 'group_charges', 'customers', 'audit_log']) t;
+from unnest(array['payments', 'session_charges', 'customers', 'audit_log']) t;
 
 select ok((select qual like '%app_arena_ids_with%' from pg_policies
             where schemaname = 'public' and tablename = t and cmd = 'SELECT'),
   t || ' is read through the permission-aware policy')
-from unnest(array['payments', 'group_payments', 'session_charges', 'group_charges', 'customers', 'audit_log']) t;
+from unnest(array['payments', 'session_charges', 'customers', 'audit_log']) t;
 
 -- ------------------------------------------- 2. private Realtime channels
 select pg_temp.as_user(1);
@@ -135,7 +135,6 @@ select is((select array_agg(tablename::text order by tablename) from pg_publicat
   array['accessory_kinds', 'activities', 'bill_discounts', 'billing_policies', 'bookings',
         'controller_allocations', 'controller_moves', 'controllers', 'customers', 'discounts',
         'game_categories', 'game_controls', 'game_resources', 'games',
-        'group_assignments', 'group_charges', 'group_extensions', 'group_payments', 'group_sessions',
         'holidays', 'payments', 'pricing_rules', 'rate_bands', 'rate_cards', 'rates',
         'resource_activities', 'resources', 'session_charges', 'session_extensions',
         'session_segments', 'sessions', 'settings', 'staff_profiles'],
@@ -163,10 +162,10 @@ select is(pg_temp.pulled(), '{}', 'sync_pull: the owner gets everything');
 select pg_temp.as_user(2);
 select is(pg_temp.pulled(), '{discounts}', 'sync_pull: bill gets money and customers, not coupons');
 select pg_temp.as_user(3);
-select is(pg_temp.pulled(), '{bill_discounts,discounts,group_charges,group_payments,payments,session_charges}',
+select is(pg_temp.pulled(), '{bill_discounts,discounts,payments,session_charges}',
   'sync_pull: start alone gets sessions and customers, no money');
 select pg_temp.as_user(4);
-select is(pg_temp.pulled(), '{bill_discounts,discounts,group_charges,group_payments,payments,session_charges}',
+select is(pg_temp.pulled(), '{bill_discounts,discounts,payments,session_charges}',
   'sync_pull: members alone gets customers, no money');
 select pg_temp.as_user(5);
 select is(pg_temp.pulled(), '{}', 'sync_pull: reports (owner level) gets everything');

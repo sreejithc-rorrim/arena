@@ -32,7 +32,6 @@ import 'package:arena_ops/domain/pricing/billing_policy.dart';
 import 'package:arena_ops/domain/pricing/rate.dart';
 import 'package:arena_ops/domain/repositories/catalog_repository.dart';
 import 'package:arena_ops/domain/repositories/controller_inventory_writer.dart';
-import 'package:arena_ops/domain/repositories/group_session_repository.dart';
 import 'package:arena_ops/domain/repositories/session_repository.dart';
 import 'package:arena_ops/domain/repositories/user_repository.dart';
 import 'package:arena_ops/domain/value/enums.dart';
@@ -44,7 +43,6 @@ class CatalogActions {
     required this.catalog,
     required this.inventory,
     required this.sessions,
-    required this.groups,
     required this.clock,
     this.guard = const PermissionGuard(null),
     this.users,
@@ -60,7 +58,6 @@ class CatalogActions {
 
   /// Read to refuse taking an occupied station out of service.
   final SessionRepository sessions;
-  final GroupSessionRepository groups;
   final Clock clock;
 
   /// Who is signed in. Defaults to "nobody", so a caller that forgets to pass
@@ -159,7 +156,7 @@ class CatalogActions {
   }
 
   /// Take a station in or out of service. Refused while someone is on it:
-  /// taking it away would strand a live session or group.
+  /// taking it away would strand a live session.
   Future<Result<void>> setStationStatus(
     Resource station,
     ResourceStatus status,
@@ -168,10 +165,7 @@ class CatalogActions {
     if (denied != null) return Err(denied);
     if (status != ResourceStatus.available) {
       final segments = await sessions.openSegments();
-      final assignments = await groups.openAssignments();
-      final busy =
-          segments.any((s) => s.resourceId == station.id) ||
-          assignments.any((a) => a.resourceId == station.id);
+      final busy = segments.any((s) => s.resourceId == station.id);
       if (busy) {
         return Err(
           Failure(
@@ -376,7 +370,6 @@ final catalogActionsProvider = Provider<CatalogActions>(
     catalog: ref.watch(catalogRepositoryProvider),
     inventory: ref.watch(controllerAllocationRepositoryProvider),
     sessions: ref.watch(sessionRepositoryProvider),
-    groups: ref.watch(groupSessionRepositoryProvider),
     clock: ref.watch(clockProvider),
     guard: PermissionGuard(ref.watch(authControllerProvider)),
     users: ref.watch(userRepositoryProvider),

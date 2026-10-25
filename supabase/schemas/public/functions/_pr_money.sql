@@ -2,7 +2,7 @@
 --
 -- step <= 1: v unchanged; dir 'up': _pr_ceil_step; any other dir: _pr_round_step (nearest, ties up).
 -- Callers pass the policy's money_rounding_paise / money_rounding_dir. Used by _pr_quote ('amount'),
--- _pr_session_bill and _pr_group_bill ('total'). Mirrors applyMoneyRounding (rounding.dart).
+-- _pr_session_bill ('total'). Mirrors applyMoneyRounding (rounding.dart).
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._pr_money (
   v    bigint,

@@ -1,8 +1,7 @@
 -- controller_moves — append-only location history of physical pads
 --
 -- One row per physical carry of a pad between stations. Written by _pad_borrow
--- (pads brought to a station inside session.start / reconfigure and group
--- placement: kind loan, or returnHome when the target is the pad's home) and by
+-- (pads brought to a station inside session.start / reconfigure: kind loan, or returnHome when the target is the pad's home) and by
 -- op_controller_move (explicit loan / returnHome, needs start or settings;
 -- permanent re-home, needs settings). A row is appended only when the pad
 -- actually changes place, so a retried move records no extra history.
@@ -42,7 +41,7 @@ comment on column public.controller_moves.to_resource_id is 'Station the pad was
 
 comment on column public.controller_moves.kind is 'loan (pad owes a return to its home), permanent (to_resource_id becomes its new home) or returnHome (back to its home; loan cleared).';
 
-comment on column public.controller_moves.session_ref is 'For a loan, the borrowing session as app text ''s:<session id>'' or ''g:<group id>'' (not an FK); null otherwise.';
+comment on column public.controller_moves.session_ref is 'For a loan, the borrowing session as app text ''s:<session id>'' (not an FK); null otherwise.';
 
 comment on column public.controller_moves.moved_at is 'When the pad was carried (UTC), as reported by the device (or the server time if none was sent).';
 

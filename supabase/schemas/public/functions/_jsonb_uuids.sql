@@ -2,7 +2,7 @@
 --
 -- Null or empty input gives '{}'; an element that is not a uuid raises
 -- (22P02, reported by sync_push as 'invalid_payload'). Used by op_session_end
--- and op_group_end to read expected_segment_ids / expected_assignment_ids.
+-- (expected_segment_ids) and op_rule_reorder.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._jsonb_uuids (
   p jsonb

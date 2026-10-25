@@ -177,26 +177,6 @@ select is((select count(*)::int from controller_allocations
 select is((select count(*)::int from controller_moves where controller_id = pg_temp.c('GHOST-1')), 1,
   'still one move');
 
--- ------------------------------------------- 3. a held pad is not allocated twice
-select is(pg_temp.push('group.create', jsonb_build_object('id','91200000-0000-0000-0000-000000000001',
-    'primary_customer_id','cccccccc-0000-0000-0000-000000000012','player_count',2,
-    'purchased_controller_count',2,'started_at','2026-10-01T09:00:00Z',
-    'scheduled_end_at','2026-10-01T10:00:00Z',
-    'pricing_snapshot', _pricing_snapshot('e0000000-0000-4000-8000-000000000112'::uuid),
-    'billing_mode','per_system',
-    'assignments', jsonb_build_array(
-      jsonb_build_object('id','92200000-0000-0000-0000-000000000001','player_number',1,'idx',0,
-        'resource_id', pg_temp.r('RIFT'),'activity_code','PS5','controller_count',1,
-        'allocations', jsonb_build_array(pg_temp.pad('a1220000-0000-0000-0000-000000000001','RIFT-1')),
-        'moves','[]'::jsonb),
-      jsonb_build_object('id','92200000-0000-0000-0000-000000000002','player_number',2,'idx',0,
-        'resource_id', pg_temp.r('RIFT'),'activity_code','PS5','controller_count',1,
-        'allocations', jsonb_build_array(pg_temp.pad('a1220000-0000-0000-0000-000000000002','RIFT-1')),
-        'moves','[]'::jsonb))))->>'error', 'controller_taken',
-  'a second player cannot take the pad the first one holds at the same station');
-select is((select count(*)::int from controller_allocations where controller_id = pg_temp.c('RIFT-1')), 0,
-  'and the refused group allocated nothing');
-
 -- ------------------------------------------- 4. borrows are all-or-nothing
 select is(pg_temp.push('session.start', pg_temp.start(
     'a1200000-0000-0000-0000-000000000002','b1200000-0000-0000-0000-000000000002','RIFT',

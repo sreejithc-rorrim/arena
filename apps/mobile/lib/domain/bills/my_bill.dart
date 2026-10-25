@@ -67,7 +67,7 @@ class MyBill {
     );
   }
 
-  /// `single` (a sessions row) or `group` (a group_sessions row).
+  /// Always `single` (a sessions row).
   final String kind;
   final String id;
 
@@ -99,7 +99,6 @@ class MyBill {
   /// Added afterwards as a missed bill (session.record).
   final bool addedLater;
 
-  bool get isGroup => kind == 'group';
   bool get isVoided => status == 'voided';
   bool get isWaived => paymentStatus == 'waived';
 
@@ -146,7 +145,7 @@ class BillAdjustCommand {
   int get differencePaise => newTotalPaise - bill.paidPaise;
 
   Map<String, dynamic> toPayload() => {
-    'scope': bill.isGroup ? 'group' : 'single',
+    'scope': 'single',
     'parent_id': bill.id,
     'billed_amount_paise': newTotalPaise,
     'reason': reason.trim(),

@@ -3,7 +3,7 @@
 -- Lives in `private`; clients reach it only through the SECURITY INVOKER wrapper
 -- public.my_bills.
 --
--- The bills (single sessions and groups, completed or voided) the caller started (created_by =
+-- The bills (single sessions, completed or voided) the caller started (created_by =
 -- auth.uid()) that closed on p_day (IST business date), newest first, as a jsonb array of _sales
 -- summaries — the same shape as arena_sales, so op_bill_adjust's rules read off the same fields.
 -- Who: bill_edit or bill_record (owners hold both); anyone else 'forbidden'. p_day null →
@@ -35,14 +35,12 @@ begin
     select jsonb_agg(b order by (b->>'at')::timestamptz desc, b->>'id')
       from _sales(p_arena, v_from, v_from + interval '1 day') b
      where (b->>'id')::uuid in (
-             select id from sessions where arena_id = p_arena and created_by = auth.uid()
-             union all
-             select id from group_sessions where arena_id = p_arena and created_by = auth.uid())),
+             select id from sessions where arena_id = p_arena and created_by = auth.uid())),
     '[]'::jsonb);
 end;
 $function$;
 
-comment on function private.my_bills(uuid, date) is 'Client API (bill_edit or bill_record): the caller''s own closed bills (sessions and groups they started) that closed on the given IST day, newest first, as _sales summaries — the floor app''s My bills.';
+comment on function private.my_bills(uuid, date) is 'Client API (bill_edit or bill_record): the caller''s own closed bills (sessions they started) that closed on the given IST day, newest first, as _sales summaries — the floor app''s My bills.';
 
 grant execute on function "private"."my_bills"(uuid, date) to "authenticated", "postgres", "service_role";
 

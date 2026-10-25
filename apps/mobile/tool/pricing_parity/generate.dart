@@ -13,11 +13,8 @@
 //   q   PricingService.quote               one priced interval
 //   x   SessionPlanner.planExtension       single-session extension cost
 //   s   SegmentBilling.bill                multi-segment single session (end)
-//   g   GroupBilling.bill                  group session (end)
-//   gx  GroupBilling subtotal difference   group extension cost (as
-//                                          GroupSessionActions.previewExtension)
-// Every s / g case also carries the wire-format charges the app sends with
-// session.end / group.end, and a `waived` flag, so the harness can push the
+// Every s case also carries the wire-format charges the app sends with
+// session.end, and a `waived` flag, so the harness can push the
 // real ops through sync_push.
 //
 // `--skew-paise K` adds K paise to the expected money of the first priced
@@ -29,14 +26,12 @@ import 'dart:math';
 import 'package:arena_ops/core/money/paise.dart';
 import 'package:arena_ops/core/time/business_calendar.dart';
 import 'package:arena_ops/core/time/ist.dart';
-import 'package:arena_ops/domain/entities/group_session.dart';
 import 'package:arena_ops/domain/entities/session.dart';
 import 'package:arena_ops/domain/pricing/billing_policy.dart';
 import 'package:arena_ops/domain/pricing/pricing_rule.dart';
 import 'package:arena_ops/domain/pricing/pricing_service.dart';
 import 'package:arena_ops/domain/pricing/pricing_snapshot.dart';
 import 'package:arena_ops/domain/pricing/rate.dart';
-import 'package:arena_ops/domain/services/group_billing.dart';
 import 'package:arena_ops/domain/services/segment_billing.dart';
 import 'package:arena_ops/domain/services/session_planner.dart';
 import 'package:arena_ops/domain/value/enums.dart';
@@ -129,7 +124,6 @@ PricingSnapshot randomSnapshot() {
     vrUnitRounding: pick(VrUnitRounding.values),
     moneyRoundingPaise: pick([1, 100, 100, 500, 1000]),
     moneyRoundingDir: pick(MoneyRoundingDir.values),
-    groupBillingMode: pick(GroupBillingMode.values),
   );
   final rates = <Rate>[];
   void add(String a, int? cc, int um, int price) {
@@ -259,56 +253,6 @@ void sessionCase(String label, PricingSnapshot snap, DateTime start, DateTime en
           'billed_minutes': c.billedMinutes, 'unit_minutes': c.unitMinutes,
           'unit_price_paise': c.unitPricePaise, 'amount_paise': c.amountPaise},
     ],
-  });
-}
-
-GroupBill groupBill(PricingSnapshot snap, List<GroupAssignment> as, int purchased, DateTime start,
-        DateTime end) =>
-    const GroupBilling().bill(snapshot: snap, assignments: as, mode: snap.policy.groupBillingMode,
-        purchasedControllerCount: purchased, groupStart: start, openEndAt: end);
-
-List<Map<String, dynamic>> assignmentsJson(List<GroupAssignment> as) => [
-      for (final a in as)
-        {'id': a.id, 'p': a.playerNumber, 'idx': a.index, 'res': a.resourceId, 'act': a.activityCode,
-          'cc': a.controllerCount, 's': iso(a.startedAt), 'e': a.endedAt == null ? null : iso(a.endedAt!)}
-    ];
-
-void groupCase(String label, PricingSnapshot snap, DateTime start, DateTime end,
-    List<GroupAssignment> as, int purchased, {required bool waived}) {
-  final bill = groupBill(snap, as, purchased, start, end);
-  out.add({
-    'k': 'g', 'label': label, 'snap': snap.toJson(), 'start': iso(start), 'end': iso(end),
-    'mode': snap.policy.groupBillingMode.code, 'purchased': purchased, 'waived': waived,
-    'as': assignmentsJson(as),
-    'subtotal': bill.subtotal.value,
-    'total': bill.total.value,
-    'keys': [
-      for (final c in bill.charges)
-        key(c.activityCode, c.resourceId, c.controllerCount, c.bandCode, c.segmentStart,
-            c.segmentEnd, c.playedMinutes, c.billedMinutes, c.unitMinutes, c.unitPricePaise,
-            c.amountPaise)
-    ]..sort(),
-    'charges': [
-      for (final c in bill.charges)
-        {'assignment': c.assignmentId, 'player_number': c.playerNumber, 'charge_index': c.chargeIndex,
-          'band_code': c.bandCode, 'activity_code': c.activityCode, 'resource_id': c.resourceId,
-          'controller_count': c.controllerCount, 'segment_start': iso(c.segmentStart),
-          'segment_end': iso(c.segmentEnd), 'played_minutes': c.playedMinutes,
-          'billed_minutes': c.billedMinutes, 'unit_minutes': c.unitMinutes,
-          'unit_price_paise': c.unitPricePaise, 'amount_paise': c.amountPaise},
-    ],
-  });
-}
-
-void groupExtensionCase(String label, PricingSnapshot snap, DateTime start, DateTime oldEnd,
-    DateTime newEnd, List<GroupAssignment> as, int purchased) {
-  final before = groupBill(snap, as, purchased, start, oldEnd);
-  final after = groupBill(snap, as, purchased, start, newEnd);
-  out.add({
-    'k': 'gx', 'label': label, 'snap': snap.toJson(), 'start': iso(start), 'old_end': iso(oldEnd),
-    'new_end': iso(newEnd), 'mode': snap.policy.groupBillingMode.code, 'purchased': purchased,
-    'as': assignmentsJson(as),
-    'added': after.subtotal.value - before.subtotal.value,
   });
 }
 
@@ -472,31 +416,6 @@ void boundaryCases() {
       }
     }
   }
-  // Groups started inside the window: both billing modes, players sharing and
-  // switching after the window ends.
-  for (final mode in GroupBillingMode.values) {
-    for (final rules in [const <PricingRule>[], [rule('grp', value: -33)]]) {
-      final snap = seedSnapshot(BillingPolicy(groupBillingMode: mode), rules: rules);
-      final t0 = fivePm.subtract(const Duration(minutes: 30));
-      final mid = t0.add(const Duration(minutes: 40));
-      final end = t0.add(const Duration(minutes: 95));
-      final as = [
-        GroupAssignment(id: 'a10', groupId: 'g', playerNumber: 1, index: 0, resourceId: stations['HEX']!,
-            activityCode: 'PS5', controllerCount: 1, startedAt: t0, endedAt: mid, createdAt: t0),
-        GroupAssignment(id: 'a11', groupId: 'g', playerNumber: 1, index: 1, resourceId: stations['GHOST']!,
-            activityCode: 'PS5', controllerCount: 1, startedAt: mid, createdAt: t0),
-        GroupAssignment(id: 'a20', groupId: 'g', playerNumber: 2, index: 0, resourceId: stations['HEX']!,
-            activityCode: 'PS5', controllerCount: 1, startedAt: t0, createdAt: t0),
-        GroupAssignment(id: 'a30', groupId: 'g', playerNumber: 3, index: 0, resourceId: stations['RIFT']!,
-            activityCode: 'VR', startedAt: t0, createdAt: t0),
-      ];
-      for (final waived in [false, true]) {
-        groupCase('group ${mode.code} rules=${rules.length} waived=$waived', snap, t0, end, as, 2, waived: waived);
-      }
-      groupExtensionCase('group ${mode.code} rules=${rules.length} extend +30', snap, t0, end,
-          end.add(const Duration(minutes: 30)), as, 2);
-    }
-  }
 }
 
 // ----------------------------------------------------------- random corpus
@@ -507,7 +426,7 @@ void randomCases(int n) {
     final act = pick(['PS5', 'PS5', 'VR', 'POOL', 'LOUNGE']);
     final cc = act == 'PS5' ? 1 + rnd.nextInt(4) : null;
     final s = randomInstant();
-    switch (i % 5) {
+    switch (i % 4) {
       case 0 || 1:
         final e = rnd.nextInt(25) == 0 ? s.subtract(const Duration(minutes: 1)) : s.add(randomDuration());
         // Sometimes priced as a later segment of a session that began earlier.
@@ -517,7 +436,7 @@ void randomCases(int n) {
         extensionCase('random x$i', snap, act, cc, s,
             s.add(Duration(minutes: 1 + rnd.nextInt(240), seconds: rnd.nextInt(60))),
             pick([15, 30, 45, 60, 90]));
-      case 3:
+      default:
         final end = s.add(Duration(minutes: 1 + rnd.nextInt(300), microseconds: rnd.nextInt(999999)));
         DateTime between() => s.add(Duration(
             microseconds: (end.difference(s).inMicroseconds * rnd.nextDouble()).floor()));
@@ -534,36 +453,6 @@ void randomCases(int n) {
             startedAt: bounds[j], endedAt: j == count - 1 ? null : bounds[j + 1], createdAt: s));
         }
         sessionCase('random s$i', snap, s, end, segs, waived: rnd.nextInt(4) == 0);
-      default:
-        final end = s.add(Duration(minutes: 1 + rnd.nextInt(300), microseconds: rnd.nextInt(999999)));
-        DateTime between() => s.add(Duration(
-            microseconds: (end.difference(s).inMicroseconds * rnd.nextDouble()).floor()));
-        final names = stations.keys.toList();
-        final players = 1 + rnd.nextInt(4);
-        final as = <GroupAssignment>[];
-        for (var p = 1; p <= players; p++) {
-          var t = s;
-          var idx = 0;
-          while (true) {
-            final a = rnd.nextInt(6) == 0 ? 'VR' : 'PS5';
-            DateTime? e = rnd.nextInt(3) == 0 ? between() : null;
-            if (e != null && !e.isAfter(t)) e = null;
-            as.add(GroupAssignment(
-              id: 'a$p$idx', groupId: 'g', playerNumber: p, index: idx, resourceId: stations[pick(names)]!,
-              activityCode: a, controllerCount: a == 'PS5' ? 1 + rnd.nextInt(2) : null,
-              startedAt: t, endedAt: e, createdAt: s));
-            if (e == null) break;
-            t = e;
-            idx++;
-          }
-        }
-        final purchased = rnd.nextInt(5);
-        if (rnd.nextBool()) {
-          groupCase('random g$i', snap, s, end, as, purchased, waived: rnd.nextInt(4) == 0);
-        } else {
-          groupExtensionCase('random gx$i', snap, s, end,
-              end.add(Duration(minutes: pick([15, 30, 60]))), as, purchased);
-        }
     }
   }
 }

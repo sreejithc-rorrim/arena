@@ -1,43 +1,18 @@
-import 'package:arena_ops/app/router/app_nav.dart';
 import 'package:arena_ops/core/theme/app_theme.dart';
-import 'package:arena_ops/features/games/presentation/game_edit_screen.dart';
-import 'package:arena_ops/features/games/presentation/games_screen.dart';
 import 'package:flutter/material.dart';
 
-/// Opens the game library (add / edit games and their per-system compatibility).
-void openGameLibrary(BuildContext context) {
-  AppNav.to(context, const GamesScreen());
-}
-
-/// Opens the add-game form, optionally prefilled with a searched name.
-void openAddGame(BuildContext context, {String? name}) {
-  final trimmed = name?.trim();
-  AppNav.to(
-    context,
-    GameEditScreen(
-      initialName: (trimmed == null || trimmed.isEmpty) ? null : trimmed,
-    ),
-  );
-}
-
-/// Shared empty state for the game pickers (new session + change game): instead
-/// of a dead end, offer to add the game (with the searched name) or open the
-/// library to set which systems run it and its player count (spec §3–§6).
-/// Without the Settings permission there is nothing to offer (the server would
-/// refuse the edit), so [onAdd] / [onLibrary] are null and it says who can.
+/// Shared empty state for the game pickers (new session + change game). Games
+/// and where they are playable are managed on the admin web, so it says who can
+/// add the game there.
 class NoGamesState extends StatelessWidget {
   const NoGamesState({
     super.key,
     required this.resourceName,
     this.query = '',
-    this.onAdd,
-    this.onLibrary,
   });
 
   final String resourceName;
   final String query;
-  final VoidCallback? onAdd;
-  final VoidCallback? onLibrary;
 
   @override
   Widget build(BuildContext context) {
@@ -60,30 +35,11 @@ class NoGamesState extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              onAdd == null && onLibrary == null
-                  ? 'Ask the owner (or anyone with Settings access) to add it or '
-                      'mark it playable here.'
-                  : 'Add it to the library, or open a game to set which systems '
-                      'run it and its player count.',
+              'Ask the owner to add it or mark it playable here on the admin '
+              'dashboard (Settings › Games).',
               textAlign: TextAlign.center,
               style: ArenaType.caption.copyWith(color: arena.textMuted),
             ),
-            if (onAdd != null) ...[
-              const SizedBox(height: AppSpacing.lg),
-              FilledButton.icon(
-                onPressed: onAdd,
-                icon: const Icon(Icons.add),
-                label: Text(query.isEmpty ? 'Add a game' : 'Add "$query"'),
-              ),
-            ],
-            if (onLibrary != null) ...[
-              const SizedBox(height: AppSpacing.sm),
-              TextButton.icon(
-                onPressed: onLibrary,
-                icon: const Icon(Icons.tune, size: 18),
-                label: const Text('Open game library'),
-              ),
-            ],
           ],
         ),
       ),

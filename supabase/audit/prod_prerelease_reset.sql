@@ -4,7 +4,7 @@
 -- been run against any database (production, staging or local).
 --
 -- What it does, in ONE transaction:
---   * removes the activity of the arenas listed in STEP 1 (sessions, groups, bookings,
+--   * removes the activity of the arenas listed in STEP 1 (sessions, bookings,
 --     payments, charges, discounts applied, pad allocations and moves, audit log,
 --     attendance, leave, salary runs, op log, tombstones; customers unless kept);
 --   * 'remove_arena' arenas additionally lose their configuration and people;
@@ -126,8 +126,7 @@ declare
   -- Child tables first: each table comes after every table that points at it.
   v_activity constant text[] := array[
     'bill_discounts', 'controller_allocations', 'session_charges', 'payments',
-    'session_extensions', 'session_segments', 'group_charges', 'group_payments',
-    'group_extensions', 'group_assignments', 'sessions', 'group_sessions', 'bookings',
+    'session_extensions', 'session_segments', 'sessions', 'bookings',
     'customers', 'controller_moves', 'audit_log', 'attendance_entries', 'attendance_punches',
     'leave_adjustments', 'leave_requests', 'salary_deduction_decisions', 'salary_adjustments',
     'salary_run_lines', 'salary_runs'];
@@ -137,7 +136,7 @@ declare
     'staff_hr_profiles'];
   -- Tables guarded by t_<table>_append_only.
   v_guarded constant text[] := array[
-    'payments', 'group_payments', 'session_charges', 'group_charges', 'bill_discounts',
+    'payments', 'session_charges', 'bill_discounts',
     'audit_log', 'salary_adjustments', 'attendance_punches', 'controller_moves'];
 begin
   select * into strict cfg from reset_cfg;

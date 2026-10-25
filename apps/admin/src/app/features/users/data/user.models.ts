@@ -17,12 +17,9 @@ export interface ArenaUser {
 
 /**
  * The permissions a Settings holder toggles for staff: the floor ones in the design's order
- * (`const PERMS`) plus `bill_edit` / `bill_record` (owner-granted: edit one's own closed bills,
- * add missed ones, in the floor app) and `time_request` (ask for a missed punch), then the
- * staff-module ones (docs/STAFF_API.md: `attendance_review` and `leave_approve` are grantable by
- * a Settings holder; `payroll` and `payroll_finalise` only by an owner, like
- * money / reports — OWNER_ONLY_PERMS). Owners hold every permission and show no toggles. None of
- * the bill or time-request ones or the staff-module ones is in the invite default.
+ * (`const PERMS`) plus `bill_edit` / `bill_record` (owner-granted, like money / reports —
+ * OWNER_ONLY_PERMS: edit one's own closed bills, add missed ones, in the floor app). Owners hold
+ * every permission and show no toggles. Neither bill one is in the invite default.
  */
 export const FLOOR_PERMS = [
   { code: 'start', label: 'Start sessions', sub: 'Open a session on a free station' },
@@ -39,40 +36,10 @@ export const FLOOR_PERMS = [
     label: 'Add missed bills',
     sub: 'Add a bill for play that was never started in the app, with a reason (floor app)',
   },
-  {
-    code: 'time_request',
-    label: 'Request missed time',
-    sub: 'Ask to add a missed clock-in or clock-out; counts once approved (floor app)',
-  },
-  {
-    code: 'attendance_review',
-    label: 'Review attendance',
-    sub: 'See everyone’s clock-ins, the location log and flagged entries',
-  },
-  {
-    code: 'leave_approve',
-    label: 'Approve leave',
-    sub: 'See everyone’s leave, approve or reject requests and adjust balances',
-  },
-  {
-    code: 'payroll',
-    label: 'Payroll',
-    sub: 'Pay setup and salary drafts; sees everyone’s pay',
-  },
-  {
-    code: 'payroll_finalise',
-    label: 'Finalise salary',
-    sub: 'Finalise or discard a salary run',
-  },
 ] as const;
 
 /** Permissions only an owner may grant or take away (the server refuses anyone else). */
-export const OWNER_ONLY_PERMS: readonly string[] = [
-  'payroll',
-  'payroll_finalise',
-  'bill_edit',
-  'bill_record',
-];
+export const OWNER_ONLY_PERMS: readonly string[] = ['bill_edit', 'bill_record'];
 
 /** What a new staff login starts with (the design's invite default). */
 export const DEFAULT_STAFF_PERMS: readonly string[] = ['start', 'bill', 'members'];

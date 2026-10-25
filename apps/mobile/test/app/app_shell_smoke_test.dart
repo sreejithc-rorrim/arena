@@ -30,22 +30,22 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
   }
 
-  testWidgets('boots to the Today tab with six navigation destinations',
+  testWidgets('boots to the Floor tab with three navigation destinations',
       (tester) async {
     await tester.pumpWidget(app());
     await settleData(tester);
 
-    // Today · Floor · Bookings · Money · Reports · More.
-    expect(find.byType(NavigationDestination), findsNWidgets(6));
-    expect(find.text('Today'), findsOneWidget);
-    expect(find.text('Floor'), findsOneWidget);
-    expect(find.text('Bookings'), findsOneWidget);
-    expect(find.text('Money'), findsOneWidget);
-    expect(find.text('Reports'), findsOneWidget);
-    expect(find.text('More'), findsOneWidget);
+    // Floor · Bookings · More (Bills needs a connection). Owners included:
+    // takings, reports and settings are on the admin web.
+    final nav = find.byType(NavigationBar);
+    expect(find.byType(NavigationDestination), findsNWidgets(3));
+    for (final label in ['Floor', 'Bookings', 'More']) {
+      expect(find.descendant(of: nav, matching: find.text(label)),
+          findsOneWidget);
+    }
 
-    // Boots to Today (owner glance).
-    expect(find.text('Takings today'), findsOneWidget);
+    // Boots to the Floor.
+    expect(find.text('New Session'), findsWidgets);
 
     await disposeApp(tester);
   });
@@ -90,22 +90,6 @@ void main() {
     await tester.tap(find.descendant(of: nav, matching: find.text('Bookings')));
     await settleData(tester);
     expect(find.text('New Booking'), findsOneWidget);
-
-    await disposeApp(tester);
-  });
-
-  testWidgets('can switch to the Reports tab', (tester) async {
-    await tester.pumpWidget(app());
-    await settleData(tester);
-
-    await tester.tap(find.text('Reports'));
-    await settleData(tester);
-
-    // Reports opens on the real report for the selected window. A freshly
-    // seeded arena has traded nothing, so it must say so rather than show
-    // invented figures.
-    expect(find.text('Today'), findsWidgets); // range chips
-    expect(find.text('Nothing recorded yet'), findsOneWidget);
 
     await disposeApp(tester);
   });

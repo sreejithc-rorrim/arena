@@ -1,5 +1,5 @@
 -- Discounts and coupons: discount.* ops, the discount_options setting, the optional discount on
--- session.end / group.end (_discount_apply), its record (bill_discounts), the sales summary and
+-- session.end (_discount_apply), its record (bill_discounts), the sales summary and
 -- the owner's usage report.
 --
 -- Seed list: PS5 standard 1 pad ₹150/h, 2 pads ₹280/h, no pricing rules; Thu 2026-10-01,
@@ -93,7 +93,7 @@ from unnest(array['authenticated','anon']) as r,
 select ok((select qual from pg_policies where tablename = 'bill_discounts') like '%app_arena_ids_with%',
   'bill_discounts are readable only with bill, money or reports');
 select ok(not has_function_privilege('authenticated', f, 'execute'), f || ' is not client-callable')
-  from unnest(array['_discount_apply(uuid,jsonb,jsonb,timestamptz,uuid,uuid)',
+  from unnest(array['_discount_apply(uuid,jsonb,jsonb,timestamptz,uuid)',
     '_discount_options(jsonb)','op_discount_upsert(uuid,jsonb)']) f;
 
 -- ===================== catalog ops
@@ -211,34 +211,14 @@ select is(pg_temp.end_op(4, 'HEX', 7500,
     '{"manual":{"value_kind":"percent","value":50},"reason":"friend","amount_paise":7500}', 2)->>'status',
   'applied', 'an owner (settings) is not held to the staff limit');
 
--- ===================== a preset on a group (2 pads on GHOST, ₹280/h)
+-- ===================== a preset (Student 10%) on session 6 (GHOST, Sat)
 select pg_temp.staff();
-select is(pg_temp.push('group.create', jsonb_build_object('id','92500000-0000-0000-0000-000000000001',
-    'primary_customer_id','cccccccc-0000-0000-0000-000000000025','player_count',2,
-    'purchased_controller_count',2,'started_at','2026-10-03T13:00:00Z',
-    'scheduled_end_at','2026-10-03T14:00:00Z','pricing_snapshot', _pricing_snapshot(pg_temp.arena()),
-    'billing_mode','per_system',
-    'assignments', jsonb_build_array(
-      jsonb_build_object('id','92510000-0000-0000-0000-000000000001','player_number',1,'idx',0,
-        'resource_id', pg_temp.r('GHOST'),'activity_code','PS5','controller_count',1,
-        'allocations','[]'::jsonb,'moves','[]'::jsonb),
-      jsonb_build_object('id','92510000-0000-0000-0000-000000000002','player_number',2,'idx',0,
-        'resource_id', pg_temp.r('GHOST'),'activity_code','PS5','controller_count',1,
-        'allocations','[]'::jsonb,'moves','[]'::jsonb))))->>'status', 'applied',
-  'a 2-player group starts on GHOST (Sat)');
-select is(pg_temp.push('group.end', jsonb_build_object('group_id','92500000-0000-0000-0000-000000000001',
-    'ended_at','2026-10-03T14:00:00Z','billed_amount_paise', 25200,
-    'expected_assignment_ids', '["92510000-0000-0000-0000-000000000001","92510000-0000-0000-0000-000000000002"]'::jsonb,
-    'expected_scheduled_end_at','2026-10-03T14:00:00Z',
-    'charges', jsonb_build_array(jsonb_build_object('id', gen_random_uuid(), 'charge_index', 0,
-      'band_code','standard','activity_code','PS5','resource_id', pg_temp.r('GHOST'),'controller_count',2,
-      'segment_start','2026-10-03T13:00:00Z','segment_end','2026-10-03T14:00:00Z',
-      'played_minutes',60,'billed_minutes',60,'unit_minutes',60,'unit_price_paise',28000,
-      'amount_paise',28000)),
-    'discount', jsonb_build_object('discount_id','d2500000-0000-0000-0000-000000000003',
-      'amount_paise', 2800)))->>'status', 'applied', 'Student 10% on the ₹280 group bill: ₹252');
-select is((select amount_paise from bill_discounts where group_id = '92500000-0000-0000-0000-000000000001'),
-  2800::bigint, 'the group bill''s discount is recorded');
+select is(pg_temp.start(6, 'GHOST', 3)->>'status', 'applied', 'session 6 starts on GHOST (Sat)');
+select is(pg_temp.end_op(6, 'GHOST', 13500,
+    '{"discount_id":"d2500000-0000-0000-0000-000000000003","amount_paise":1500}', 3)->>'status',
+  'applied', 'Student 10% on the ₹150 bill: ₹135');
+select is((select amount_paise from bill_discounts where session_id = 'a2500000-0000-0000-0000-000000000006'),
+  1500::bigint, 'the preset''s discount is recorded');
 
 -- ===================== sales and usage report
 select pg_temp.owner();

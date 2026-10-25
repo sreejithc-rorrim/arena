@@ -10,6 +10,54 @@ together.
 
 ## [Unreleased]
 
+### Added
+- Admin Overview: a "Day" period shows any past day (yesterday by default, picked with a date
+  field; `?period=day&day=YYYY-MM-DD`) with takings by hour, compared with the day before.
+
+### Removed
+- Group sessions, everywhere, to be rebuilt from scratch: the floor app's group screens and
+  sheets (new group, assign, switch, extend, end, payment, "Open groups"), group billing and the
+  "group billing mode" rule, group bills in Sales, Overview, reports, CSV (the bills report loses
+  its Type column) and My bills, and the `group.*` sync ops (now refused as `unknown_op`).
+  **Destructive:** migration `20261024131855_remove_group_sessions` drops `group_sessions`,
+  `group_assignments`, `group_extensions`, `group_charges` and `group_payments` with their data,
+  plus `billing_policies.group_billing_mode`, `bill_discounts.group_id` (`session_id` becomes
+  required) and the group columns of `controller_allocations`. The floor app's database (v19)
+  drops its group tables after the usual backup; an unsynced group bill on a device is lost.
+- Floor app owner screens: Today, Money, Reports (and its Excel export) and Settings (pricing,
+  hours, holidays, stations, staff and PINs, game library and game editing). Owners land on the
+  Floor like staff and do that work on the admin web; the bottom bar is Floor · Bookings · Bills ·
+  More, and Bills now shows for owners too. Game pickers and the system's games list are
+  read-only and point to the dashboard. Dependencies `excel` and `share_plus` removed.
+- The staff-time module, to be rebuilt when there is a real need (code kept at the git tag
+  `staff-module-archive`): attendance (clock-in / clock-out, corrections, review, missed-time
+  requests), GPS / geofence clock-in, shifts and staff holidays, leave, HR profile, pay setup and
+  payroll. Floor app: the attendance chip, Attendance and Leave screens, and the location
+  permission (`geolocator`, `flutter_map`, `latlong2`). Dashboard: Attendance and Payroll, the
+  Team tabs Attendance / Leave / Salary / Schedule, Settings › Staff's schedule, clock-in,
+  attendance, leave and payroll tabs, "Works here as staff", and the Leaflet map. Server: its
+  15 tables, ops, `attendance_days` / `leave_balances`, the `attendance` / `work_hours` /
+  `leave_rules` settings and the permissions `attendance_review`, `leave_approve`, `payroll`,
+  `payroll_finalise` and `time_request` (migration `20261024090442_remove_staff_module`, which
+  drops those tables and their data). Staff accounts, invitations, permissions, Team, staff terms
+  and personal details stay.
+
+### Fixed
+- Admin sign-in, create account, create arena, accept invite and reset password pages show the
+  ARQ logo instead of the old "404" badge (#24).
+- Admin Pricing › rule "When": the From and To time fields are the same size; the "00:00 is
+  midnight" hint no longer wraps or stretches the From field (#25).
+- Floor app booking check-in runs the same price check as New Session: a controller count with
+  no price is refused ("No price for PS5 with 3 controllers.") instead of starting a session the
+  server rejects (`no_rate`). The no-price tip now points to the dashboard's Pricing (#30).
+- Floor app End sheet: bill lines show their exact amounts (₹37.50, as in Sales) and cash rounding
+  gets its own "Rounding" line, so the lines add up to the total. Amounts charged are unchanged
+  (#22).
+- Floor app booking check-in: a station whose session is still running, overtime included, is
+  never offered. An any-system booking goes to a free station, and the other free ones are chips
+  staff can pick instead. A booking for a station still in use says so ("HEX is still in use.")
+  instead of failing only at "Check in & start" (#20).
+
 ## [0.0.1-alpha.1] - 2026-10-24
 
 ### Fixed

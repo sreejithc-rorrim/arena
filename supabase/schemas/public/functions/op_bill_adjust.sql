@@ -2,15 +2,16 @@
 --   match it, audited.
 --
 -- Permission: money (an owner passes), or bill_edit for a bill the caller started (the
---   session's / group's created_by); anyone else is refused (forbidden, hint 'not your bill').
--- Payload: scope ('single' default | 'group'), parent_id (session or group id),
+--   session's created_by); anyone else is refused (forbidden, hint 'not your bill').
+-- Payload: scope ('single', the default and only value), parent_id (session id),
 --   billed_amount_paise (the new total: whole paise, 0 or more), reason (required: 1–500
 --   characters after trimming), method (cash | upi | card | other: how the difference was paid
 --   or given back; needed when collected differs from the new total), payment_id? (id of that
 --   row; generated when absent), expected_billed_paise and expected_paid_paise (the total and
 --   net collected the caller saw: the difference is only recorded against those).
--- Checks / errors: forbidden (incl. 'not your bill'); reason_required; reason_too_long; invalid_total (missing or
---   negative); invalid_method; not_found (hint session / group); not_ended (still running);
+-- Checks / errors: forbidden (incl. 'not your bill'); invalid_payload (hint scope: any scope but
+--   'single'); reason_required; reason_too_long; invalid_total (missing or
+--   negative); invalid_method; not_found (hint session); not_ended (still running);
 --   voided; waived (a waived bill owes nothing); stale (the bill's total or collected differs
 --   from expected_*, e.g. a payment landed meanwhile; missing expected_* is stale too);
 --   same_total (that total, already collected).
@@ -31,19 +32,19 @@ create or replace function public.op_bill_adjust (
   AS $function$
 declare
   v_now    timestamptz := statement_timestamp();
-  v_group  boolean := coalesce(p->>'scope', 'single') = 'group';
   v_parent uuid := (p->>'parent_id')::uuid;
   v_new    bigint := (p->>'billed_amount_paise')::bigint;
   v_reason text := nullif(btrim(coalesce(p->>'reason', '')), '');
   v_method text := p->>'method';
   v_pay_id uuid := coalesce(nullif(p->>'payment_id', '')::uuid, gen_random_uuid());
-  v_entity text := case when coalesce(p->>'scope', 'single') = 'group' then 'group_session'
-                        else 'session' end;
   v_status text; v_pay text; v_old bigint; v_paid bigint; v_diff bigint;
   v_by     uuid;
   v_money  boolean := private.app_has_perm(p_arena, 'money');
 begin
   if not v_money then perform _need(p_arena, 'bill_edit'); end if;
+  if coalesce(p->>'scope', 'single') <> 'single' then
+    raise exception 'invalid_payload' using hint = 'scope';
+  end if;
   if v_reason is null then
     raise exception 'reason_required' using hint = 'say why the bill changes';
   end if;
@@ -53,17 +54,10 @@ begin
   end if;
 
   -- Lock the bill (as op_payment does), so payments on it queue behind the change.
-  if v_group then
-    select status, payment_status, billed_amount_paise, created_by into v_status, v_pay, v_old, v_by
-      from group_sessions where id = v_parent and arena_id = p_arena for update;
-    if not found then raise exception 'not_found' using hint = 'group'; end if;
-    select coalesce(sum(amount_paise), 0) into v_paid from group_payments where group_id = v_parent;
-  else
-    select status, payment_status, billed_amount_paise, created_by into v_status, v_pay, v_old, v_by
-      from sessions where id = v_parent and arena_id = p_arena for update;
-    if not found then raise exception 'not_found' using hint = 'session'; end if;
-    select coalesce(sum(amount_paise), 0) into v_paid from payments where session_id = v_parent;
-  end if;
+  select status, payment_status, billed_amount_paise, created_by into v_status, v_pay, v_old, v_by
+    from sessions where id = v_parent and arena_id = p_arena for update;
+  if not found then raise exception 'not_found' using hint = 'session'; end if;
+  select coalesce(sum(amount_paise), 0) into v_paid from payments where session_id = v_parent;
   if not v_money and v_by is distinct from auth.uid() then
     raise exception 'forbidden' using errcode = '42501', hint = 'not your bill';
   end if;
@@ -88,29 +82,17 @@ begin
     if v_method is null or v_method not in ('cash', 'upi', 'card', 'other') then
       raise exception 'invalid_method' using hint = 'how the difference was paid or given back';
     end if;
-    if v_group then
-      insert into group_payments(id, arena_id, group_id, amount_paise, method, is_refund, note,
-          reason, created_by, created_at)
-        values (v_pay_id, p_arena, v_parent, v_diff, v_method, v_diff < 0, 'Bill edited',
-          v_reason, auth.uid(), v_now);
-    else
-      insert into payments(id, arena_id, session_id, amount_paise, method, kind, note, reason,
-          created_by, created_at)
-        values (v_pay_id, p_arena, v_parent, v_diff, v_method,
-          case when v_diff < 0 then 'refund' else 'payment' end, 'Bill edited',
-          v_reason, auth.uid(), v_now);
-    end if;
+    insert into payments(id, arena_id, session_id, amount_paise, method, kind, note, reason,
+        created_by, created_at)
+      values (v_pay_id, p_arena, v_parent, v_diff, v_method,
+        case when v_diff < 0 then 'refund' else 'payment' end, 'Bill edited',
+        v_reason, auth.uid(), v_now);
   end if;
-  if v_group then
-    update group_sessions set billed_amount_paise = v_new, payment_status = 'paid', updated_at = v_now
-      where id = v_parent;
-  else
-    update sessions set billed_amount_paise = v_new, payment_status = 'paid', updated_at = v_now
-      where id = v_parent;
-  end if;
+  update sessions set billed_amount_paise = v_new, payment_status = 'paid', updated_at = v_now
+    where id = v_parent;
   insert into audit_log(arena_id, entity_type, entity_id, action, reason, before, after,
       created_by, created_at)
-    values (p_arena, v_entity, v_parent, 'bill_adjust', v_reason,
+    values (p_arena, 'session', v_parent, 'bill_adjust', v_reason,
       jsonb_build_object('billed_paise', v_old, 'paid_paise', v_paid),
       jsonb_build_object('billed_paise', v_new, 'paid_paise', v_new), auth.uid(), v_now);
   return jsonb_build_object('payment_status', 'paid');

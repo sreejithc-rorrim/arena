@@ -1,8 +1,7 @@
 -- resources — bookable places on the floor: stations, tables and rooms
 --
--- A session segment or group assignment occupies one resource; at most one open
--- occupant per resource is enforced elsewhere (session_segments /
--- group_assignments triggers and indexes). Written by op_resource_upsert
+-- A session segment occupies one resource; at most one open occupant per
+-- resource is enforced elsewhere (session_segments trigger and index). Written by op_resource_upsert
 -- (resource.upsert, which also replaces its resource_activities links),
 -- op_resource_set_status and op_resource_set_mode; seeded by
 -- _seed_arena_catalog. Controllers have a home and a current resource here.
@@ -29,7 +28,7 @@ create table "public"."resources" (
     'disabled'::text])))
 );
 
-comment on table public.resources is 'Bookable places on the floor (gaming stations, pool tables, rooms). Sessions, group assignments, bookings and controllers point at them.';
+comment on table public.resources is 'Bookable places on the floor (gaming stations, pool tables, rooms). Sessions, bookings and controllers point at them.';
 
 comment on column public.resources.arena_id is 'Owning arena (tenant). RLS limits reads to arenas the caller is an active member of.';
 

@@ -1,8 +1,8 @@
 import { istDayStartOf } from '../time/ist';
 
 /**
- * Display helpers shared by the staff screens (leave, pay setup, payroll). Days are IST calendar
- * dates ("2026-10-05"); minutes are whole numbers. Nothing here computes pay: the server does.
+ * Display helpers shared by the staff screens (terms, personal details). Days are IST calendar
+ * dates ("2026-10-05"); minutes are whole numbers.
  */
 
 const TIME_ZONE = 'Asia/Kolkata';

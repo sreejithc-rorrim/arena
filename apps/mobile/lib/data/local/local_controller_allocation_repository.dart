@@ -72,7 +72,7 @@ class ControllerDashboard {
 /// Reads for the owner dashboard, plus the two pad-level write flows that the
 /// count-based model never had: MOVING a pad between stations (brief §5) and
 /// LOCKING a dual-capability station to one mode (RIFT PS5/VR, brief §1).
-/// Allocation itself happens inside the session/group repositories via
+/// Allocation itself happens inside the session repository via
 /// [ControllerAllocator]; this repository is the owner-facing view + inventory.
 class LocalControllerAllocationRepository
     implements ControllerAllocationReader, ControllerInventoryWriter {
@@ -96,9 +96,6 @@ class LocalControllerAllocationRepository
         resourceId: a.resourceId,
         sessionId: a.sessionId,
         segmentId: a.segmentId,
-        groupId: a.groupId,
-        assignmentId: a.assignmentId,
-        playerNumber: a.playerNumber,
       );
 
   @override
@@ -223,10 +220,7 @@ class LocalControllerAllocationRepository
     final openSeg = await (_db.select(_db.sessionSegments)
           ..where((t) => t.resourceId.equals(resourceId) & t.endedAt.isNull()))
         .getSingleOrNull();
-    final openAssign = await (_db.select(_db.groupAssignments)
-          ..where((t) => t.resourceId.equals(resourceId) & t.endedAt.isNull()))
-        .get();
-    if (openSeg != null || openAssign.isNotEmpty) {
+    if (openSeg != null) {
       return const Err(Failure(
         message: 'That station is in use.',
         fix: 'End the current session before changing its mode.',

@@ -15,7 +15,6 @@ import 'package:arena_ops/data/local/database.dart';
 import 'package:arena_ops/data/local/local_catalog_repository.dart';
 import 'package:arena_ops/data/local/local_controller_allocation_repository.dart';
 import 'package:arena_ops/data/local/local_customer_repository.dart';
-import 'package:arena_ops/data/local/local_group_session_repository.dart';
 import 'package:arena_ops/data/local/local_session_repository.dart';
 import 'package:arena_ops/data/local/local_user_repository.dart';
 import 'package:arena_ops/data/local/seed_data.dart';
@@ -74,7 +73,6 @@ void main() {
     catalog: catalog,
     inventory: LocalControllerAllocationRepository(db, clock),
     sessions: sessions,
-    groups: LocalGroupSessionRepository(db, clock),
     clock: clock,
     guard: PermissionGuard(user),
   );
@@ -372,7 +370,6 @@ void main() {
           catalog: catalog,
           inventory: LocalControllerAllocationRepository(db, clock),
           sessions: sessions,
-          groups: LocalGroupSessionRepository(db, clock),
           clock: clock,
           guard: PermissionGuard(actor),
           users: LocalUserRepository(db, clock),

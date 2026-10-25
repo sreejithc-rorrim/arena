@@ -22,10 +22,10 @@ import 'package:arena_ops/domain/auth/permission_guard.dart';
 import 'package:arena_ops/domain/entities/booking.dart';
 import 'package:arena_ops/domain/entities/resource.dart';
 import 'package:arena_ops/domain/entities/session.dart';
+import 'package:arena_ops/domain/pricing/pricing_service.dart';
 import 'package:arena_ops/domain/repositories/booking_repository.dart';
 import 'package:arena_ops/domain/repositories/catalog_repository.dart';
 import 'package:arena_ops/domain/repositories/commands.dart';
-import 'package:arena_ops/domain/repositories/group_session_repository.dart';
 import 'package:arena_ops/domain/repositories/session_repository.dart';
 import 'package:arena_ops/domain/services/availability_service.dart';
 import 'package:arena_ops/domain/services/booking_availability_service.dart';
@@ -79,6 +79,7 @@ class CheckInPlan {
     this.gameName,
     this.gameMaxLocalPlayers,
     this.alternatives = false,
+    this.choices = const [],
   });
 
   final Resource resource;
@@ -92,6 +93,11 @@ class CheckInPlan {
 
   /// True for an any-system booking: the station was chosen now.
   final bool alternatives;
+
+  /// Every station an any-system booking could start at right now, [resource]
+  /// among them (staff may pick another); empty for a booking for a named
+  /// station.
+  final List<Resource> choices;
 }
 
 class BookingActions {
@@ -104,9 +110,9 @@ class BookingActions {
     this.reminders,
     this.sessionReminders,
     this.availability = const BookingAvailabilityService(),
-    this.groups,
     this.boards,
     this.padSelection = const PadSelection(),
+    this.pricing = const PricingService(),
   });
 
   final BookingRepository bookings;
@@ -127,15 +133,16 @@ class BookingActions {
   final SessionReminders? sessionReminders;
   final BookingAvailabilityService availability;
 
-  /// Open group assignments hold stations too; optional for older callers.
-  final GroupSessionRepository? groups;
-
   /// The controller inventory as one station sees it. With it, check-in
   /// validates (and can borrow) specific pads exactly like New Session;
   /// without it, check-in is count-only (the repository still refuses more
   /// controllers than are free at the station).
   final PadBoardLoader? boards;
   final PadSelection padSelection;
+
+  /// The price check New Session runs (SessionPlanner.planStart): check-in
+  /// refuses what the price list cannot bill, as the server would (`no_rate`).
+  final PricingService pricing;
 
   /// Active-session + existing-booking occupancy over [window]. Unassigned
   /// (any-system) bookings do not block a specific resource until check-in.
@@ -145,7 +152,6 @@ class BookingActions {
   }) async {
     final active = await sessions.active();
     final booked = await bookings.overlapping(window.start, window.end);
-    final groupActive = await groups?.activeGroups() ?? const [];
     return [
       for (final a in active)
         Occupancy(
@@ -153,15 +159,6 @@ class BookingActions {
           interval: UtcInterval(a.current.startedAt, a.session.scheduledEndAt),
           isBooking: false,
         ),
-      // A station a group is playing on is just as busy (group feature §7).
-      for (final g in groupActive)
-        for (final a in g.openAssignments)
-          Occupancy(
-            resourceId: a.resourceId,
-            interval: UtcInterval(a.startedAt, g.group.scheduledEndAt),
-            isBooking: false,
-            label: 'group',
-          ),
       for (final b in booked)
         if (b.resourceId != null && b.id != excludeBookingId)
           Occupancy(
@@ -308,7 +305,8 @@ class BookingActions {
 
   /// Where and how a booked customer would be seated right now: the station
   /// (the booked one, or the best free compatible one for an any-system
-  /// booking), the session end, and the controllers the booking asked for.
+  /// booking, with the other free ones staff may pick instead), the session
+  /// end, and the controllers the booking asked for.
   /// Nothing is written — the check-in sheet shows this, lets staff pick the
   /// physical pads, then calls [checkIn].
   Future<Result<CheckInPlan>> planCheckIn(
@@ -350,6 +348,32 @@ class BookingActions {
       playersRequired: booking.playersRequired,
     );
 
+    // The session starts now, so a station whose session is still running is
+    // busy even past that session's booked end (overtime), which the
+    // occupancies above do not cover; one set to another mode would be
+    // refused at start.
+    final running = {
+      for (final a in await sessions.active()) a.current.resourceId,
+    };
+    bool startableNow(Resource r) =>
+        !running.contains(r.id) &&
+        (r.currentMode == null || r.currentMode == booking.activityCode);
+
+    final choices = booking.resourceId != null
+        ? const <Resource>[]
+        : [
+            for (final r in availability.availableSystems(
+              window: window,
+              resources: resources,
+              occupancies: occ,
+              requireActivityCode: booking.activityCode,
+              compatibility: compat,
+              gameMaxLocalPlayers: game?.maxLocalPlayers,
+              playersRequired: booking.playersRequired,
+            ))
+              if (startableNow(r)) r,
+          ];
+
     Resource resolved;
     final fixedId = booking.resourceId ?? preferResourceId;
     if (fixedId != null) {
@@ -359,20 +383,24 @@ class BookingActions {
           Failure(message: 'Unknown system.', code: 'no_resource'),
         );
       }
-      final check = fits(matches.first);
+      final station = matches.first;
+      if (running.contains(station.id)) {
+        return Err(
+          Failure(
+            message: '${station.name} is still in use.',
+            fix: booking.resourceId != null
+                ? 'End the session there first, or edit the booking to '
+                      'another station.'
+                : 'Pick another station.',
+            code: 'resource_busy',
+          ),
+        );
+      }
+      final check = fits(station);
       if (check.isErr) return Err(check.failureOrNull!);
-      resolved = matches.first;
+      resolved = station;
     } else {
-      final avail = availability.availableSystems(
-        window: window,
-        resources: resources,
-        occupancies: occ,
-        requireActivityCode: booking.activityCode,
-        compatibility: compat,
-        gameMaxLocalPlayers: game?.maxLocalPlayers,
-        playersRequired: booking.playersRequired,
-      );
-      if (avail.isEmpty) {
+      if (choices.isEmpty) {
         return const Err(
           Failure(
             message: 'No compatible system is free right now.',
@@ -381,11 +409,11 @@ class BookingActions {
           ),
         );
       }
-      resolved = avail.first;
+      resolved = choices.first;
       // Prefer a system that already has the booked controllers free, so the
       // party is not sent where pads would have to be borrowed.
       if (usesControllers && wanted != null && boards != null) {
-        for (final r in avail) {
+        for (final r in choices) {
           final b = await boards!.load(resourceId: r.id, resourceName: r.name);
           if (!b.tracked || b.inventory.freeHere >= wanted) {
             resolved = r;
@@ -403,6 +431,7 @@ class BookingActions {
         gameName: game?.name,
         gameMaxLocalPlayers: game?.maxLocalPlayers,
         alternatives: booking.resourceId == null,
+        choices: choices,
       ),
     );
   }
@@ -444,6 +473,16 @@ class BookingActions {
     }
 
     final snapshot = await catalog.currentSnapshot();
+    // Priced like a walk-in start, for the chosen controller count: without a
+    // rate the session would bill ₹0 and the server refuses it.
+    final priced = pricing.quote(
+      snapshot: snapshot,
+      activityCode: booking.activityCode,
+      controllerCount: plan.usesControllers ? choice.count : null,
+      start: now,
+      end: plan.scheduledEnd,
+    );
+    if (priced.isErr) return Err(priced.failureOrNull!);
     final started = await sessions.start(
       StartSessionCommand(
         customerId: booking.customerId!,
@@ -534,11 +573,9 @@ final bookingActionsProvider = Provider<BookingActions>(
     guard: PermissionGuard(ref.watch(authControllerProvider)),
     reminders: ref.watch(bookingRemindersProvider),
     sessionReminders: ref.watch(sessionRemindersProvider),
-    groups: ref.watch(groupSessionRepositoryProvider),
     boards: PadBoardLoader(
       catalog: ref.watch(catalogRepositoryProvider),
       sessions: ref.watch(sessionRepositoryProvider),
-      groups: ref.watch(groupSessionRepositoryProvider),
       pads: ref.watch(controllerAllocationRepositoryProvider),
     ),
   ),

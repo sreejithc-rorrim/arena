@@ -9,15 +9,12 @@ import 'package:arena_ops/data/local/database.dart';
 import 'package:arena_ops/data/local/local_catalog_repository.dart';
 import 'package:arena_ops/data/local/local_controller_allocation_repository.dart';
 import 'package:arena_ops/data/local/local_customer_repository.dart';
-import 'package:arena_ops/data/local/local_group_session_repository.dart';
 import 'package:arena_ops/data/local/local_session_repository.dart';
 import 'package:arena_ops/data/local/seed_data.dart';
 import 'package:arena_ops/domain/entities/controller.dart';
 import 'package:arena_ops/domain/entities/customer.dart';
 import 'package:arena_ops/domain/pricing/pricing_snapshot.dart';
 import 'package:arena_ops/domain/repositories/commands.dart';
-import 'package:arena_ops/domain/repositories/group_commands.dart';
-import 'package:arena_ops/domain/value/enums.dart';
 import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,7 +24,6 @@ import '../../support/pricing_fixtures.dart';
 void main() {
   late AppDatabase db;
   late LocalSessionRepository sessions;
-  late LocalGroupSessionRepository groups;
   late LocalCatalogRepository catalog;
   late LocalCustomerRepository customers;
   late LocalControllerAllocationRepository alloc;
@@ -40,7 +36,6 @@ void main() {
     db = AppDatabase(NativeDatabase.memory());
     await LocalSeed.apply(db);
     sessions = LocalSessionRepository(db);
-    groups = LocalGroupSessionRepository(db);
     catalog = LocalCatalogRepository(db);
     customers = LocalCustomerRepository(db);
     alloc = LocalControllerAllocationRepository(db);
@@ -75,68 +70,7 @@ void main() {
         controllerIds: controllerIds,
       ));
 
-  GroupAssignmentDraft pa(int n, String resId, String resName,
-          {String? game, List<String>? ids}) =>
-      GroupAssignmentDraft(
-        playerNumber: n,
-        resourceId: resId,
-        resourceName: resName,
-        activityCode: 'PS5',
-        gameId: game,
-        controllerCount: ids?.length,
-        controllerIds: ids,
-      );
-
-  Future createGroup(List<GroupAssignmentDraft> a, {int players = 4}) =>
-      groups.create(CreateGroupCommand(
-        primaryCustomerId: who.id,
-        playerCount: players,
-        purchasedControllerCount: players,
-        startedAt: start,
-        scheduledEndAt: start.add(const Duration(hours: 1)),
-        snapshot: snapshot,
-        billingMode: GroupBillingMode.perSystem,
-        assignments: a,
-      ));
-
   // -------------------------------------------------------------------------
-  group('four-player group + port capacity (brief §3, §6)', () {
-    test('borrow two pads to HEX, seat four players on EA FC, reject a fifth',
-        () async {
-      // HEX has two pads; borrow GHOST's two so four are physically present.
-      await alloc.moveController(
-          controllerId: 'ctl_ghost_1', toResourceId: 'hex', kind: ControllerMoveKind.loan);
-      await alloc.moveController(
-          controllerId: 'ctl_ghost_2', toResourceId: 'hex', kind: ControllerMoveKind.loan);
-
-      final r = await createGroup([
-        pa(1, 'hex', 'HEX', game: 'g_eafc', ids: ['ctl_hex_1']),
-        pa(2, 'hex', 'HEX', game: 'g_eafc', ids: ['ctl_hex_2']),
-        pa(3, 'hex', 'HEX', game: 'g_eafc', ids: ['ctl_ghost_1']),
-        pa(4, 'hex', 'HEX', game: 'g_eafc', ids: ['ctl_ghost_2']),
-      ]);
-      expect(r.isOk, isTrue, reason: r.failureOrNull?.display);
-      expect((await alloc.openAllocations()).length, 4);
-
-      // A fifth player on EA FC (max 4) is rejected.
-      final fifth = await groups.addAssignment(AddAssignmentCommand(
-        groupId: r.valueOrNull!.id,
-        at: start,
-        playerNumber: 5,
-        resourceId: 'hex',
-        resourceName: 'HEX',
-        activityCode: 'PS5',
-        gameId: 'g_eafc',
-        controllerIds: const ['ctl_rift_1'],
-      ));
-      expect(fifth.isErr, isTrue);
-      // A fifth hits both ceilings at once (EA FC = 4 players, PS5 = 4 ports);
-      // the absolute port check reports first. The player-limit-only path is
-      // covered distinctly by the Tekken (2-player) test below.
-      expect(fifth.failureOrNull!.code,
-          anyOf('players_exceeded', 'controllers_exceeded'));
-    });
-  });
 
   group('controller borrowing: location vs assignment (brief §5, §7)', () {
     test('a borrowed pad records its station separately from its assignment',
@@ -167,26 +101,6 @@ void main() {
   });
 
   group('double-allocation prevention (brief §4, §9)', () {
-    test('the same pad cannot be in two active allocations', () async {
-      final r = await createGroup([
-        pa(1, 'hex', 'HEX', game: 'g_eafc', ids: ['ctl_hex_1']),
-      ], players: 2);
-      expect(r.isOk, isTrue, reason: r.failureOrNull?.display);
-
-      final second = await groups.addAssignment(AddAssignmentCommand(
-        groupId: r.valueOrNull!.id,
-        at: start,
-        playerNumber: 2,
-        resourceId: 'hex',
-        resourceName: 'HEX',
-        activityCode: 'PS5',
-        gameId: 'g_eafc',
-        controllerIds: const ['ctl_hex_1'], // already held by player 1
-      ));
-      expect(second.isErr, isTrue);
-      expect(second.failureOrNull!.code, 'controller_taken');
-    });
-
     test('the DB unique index rejects a second open allocation row directly',
         () async {
       await startSingle(
@@ -219,28 +133,6 @@ void main() {
   });
 
   group('game player limits (brief §6)', () {
-    test('a 2-player game rejects a third player on one station', () async {
-      final r = await createGroup([
-        pa(1, 'hex', 'HEX', game: 'g_tekken8', ids: ['ctl_hex_1']),
-        pa(2, 'hex', 'HEX', game: 'g_tekken8', ids: ['ctl_hex_2']),
-      ], players: 3);
-      expect(r.isOk, isTrue, reason: r.failureOrNull?.display);
-      await alloc.moveController(
-          controllerId: 'ctl_void_1', toResourceId: 'hex', kind: ControllerMoveKind.loan);
-      final third = await groups.addAssignment(AddAssignmentCommand(
-        groupId: r.valueOrNull!.id,
-        at: start,
-        playerNumber: 3,
-        resourceId: 'hex',
-        resourceName: 'HEX',
-        activityCode: 'PS5',
-        gameId: 'g_tekken8',
-        controllerIds: const ['ctl_void_1'],
-      ));
-      expect(third.isErr, isTrue);
-      expect(third.failureOrNull!.code, 'players_exceeded');
-    });
-
     test('a single session of a 2-player game rejects three controllers',
         () async {
       final r = await startSingle(
@@ -261,56 +153,10 @@ void main() {
   });
 
   group('station availability (brief §7)', () {
-    test('a station under maintenance blocks a new group allocation', () async {
-      await setResourceStatus('hex', 'maintenance');
-      final r = await createGroup([
-        pa(1, 'hex', 'HEX', game: 'g_eafc', ids: ['ctl_hex_1']),
-      ], players: 1);
-      expect(r.isErr, isTrue);
-      expect(r.failureOrNull!.code, 'resource_unavailable');
-    });
-
     test('the dashboard reflects a station status', () async {
       await setResourceStatus('ghost', 'maintenance');
       final board = await alloc.dashboard();
       expect(board.stations.firstWhere((s) => s.id == 'ghost').status, 'maintenance');
-    });
-  });
-
-  group('mid-session change preserves the timer + history (brief §8)', () {
-    test('switching a player closes the old pad and opens the new at once',
-        () async {
-      final r = await createGroup([
-        pa(1, 'hex', 'HEX', game: 'g_eafc', ids: ['ctl_hex_1']),
-      ], players: 1);
-      final group = r.valueOrNull!;
-      final at = start.add(const Duration(minutes: 20));
-
-      final sw = await groups.switchAssignment(SwitchAssignmentCommand(
-        groupId: group.id,
-        playerNumber: 1,
-        at: at,
-        resourceId: 'void',
-        resourceName: 'VOID',
-        activityCode: 'PS5',
-        gameId: 'g_eafc',
-        controllerIds: const ['ctl_void_1'],
-      ));
-      expect(sw.isOk, isTrue, reason: sw.failureOrNull?.display);
-
-      // Parent timer untouched.
-      final reloaded = await groups.getById(group.id);
-      expect(reloaded!.startedAt, group.startedAt);
-      expect(reloaded.scheduledEndAt, group.scheduledEndAt);
-
-      // Old pad closed exactly at the switch; new pad open; no overlap.
-      final hexHistory = await alloc.allocationsForController('ctl_hex_1');
-      expect(hexHistory.single.endedAt, at);
-      final voidHistory = await alloc.allocationsForController('ctl_void_1');
-      expect(voidHistory.single.endedAt, isNull);
-      expect(voidHistory.single.startedAt, at);
-
-      expect((await alloc.openAllocations()).single.controllerId, 'ctl_void_1');
     });
   });
 
@@ -459,23 +305,6 @@ void main() {
       final reloaded = await sessions.getById(sess.id);
       expect(reloaded!.startedAt, sess.startedAt);
       expect(reloaded.scheduledEndAt, sess.scheduledEndAt);
-    });
-
-    test('ending a group frees all pads', () async {
-      final r = await createGroup([
-        pa(1, 'hex', 'HEX', game: 'g_eafc', ids: ['ctl_hex_1']),
-      ], players: 1);
-      await groups.end(EndGroupCommand(
-          groupId: r.valueOrNull!.id, actualEndedAt: end, charges: const [], billedAmountPaise: 0));
-      expect(await alloc.openAllocations(), isEmpty);
-    });
-
-    test('voiding a group frees all pads', () async {
-      final r = await createGroup([
-        pa(1, 'hex', 'HEX', game: 'g_eafc', ids: ['ctl_hex_1']),
-      ], players: 1);
-      await groups.voidGroup(r.valueOrNull!.id, 'correction');
-      expect(await alloc.openAllocations(), isEmpty);
     });
   });
 }

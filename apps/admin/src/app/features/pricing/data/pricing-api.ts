@@ -189,7 +189,7 @@ export function holidayOps(h: Holiday, replacing?: string): SyncOp[] {
   ];
 }
 
-/** policy.save: the whole policy (group_billing_mode included) inside `policy`. */
+/** policy.save: the whole policy inside `policy`. */
 export function policyOps(policy: BillingPolicy): SyncOp[] {
   return [{ kind: 'policy.save', payload: { policy: policyJson(policy) } }];
 }
@@ -420,7 +420,6 @@ class SupabasePricingApi extends PricingApi {
       next: d['next'] == null ? null : String(d['next']),
       rows: ((d['rows'] as Record<string, unknown>[] | null) ?? []).map((u) => ({
         billId: String(u['bill_id']),
-        kind: u['kind'] === 'group' ? 'group' : 'single',
         at: String(u['at']),
         customer: u['customer'] == null ? null : String(u['customer']),
         billedPaise: u['billed_paise'] == null ? null : Number(u['billed_paise']),

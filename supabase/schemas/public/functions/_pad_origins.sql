@@ -1,7 +1,7 @@
 -- _pad_origins(p_arena, p_ids) — distinct current stations of the given pads.
 --
 -- Tells callers which stations to lock before borrowing pads, and is re-read after locking to
--- detect a pad that moved meanwhile ('retry'). Used by _group_lock, op_session_start and
+-- detect a pad that moved meanwhile ('retry'). Used by op_session_start and
 -- op_session_reconfigure.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._pad_origins (

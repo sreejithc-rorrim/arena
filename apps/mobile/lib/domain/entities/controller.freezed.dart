@@ -22,7 +22,7 @@ mixin _$Controller {
 /// moved.
  String get currentResourceId; ControllerStatus get status;/// Why it is in this state — "left stick drift".
  String? get notes;/// Set while on loan: the station to return it to.
- String? get loanReturnTo;/// Which session owes the return, as `s:<sessionId>` or `g:<groupId>`.
+ String? get loanReturnTo;/// Which session owes the return, as `s:<sessionId>`.
  String? get loanSessionRef; DateTime get updatedAt;
 /// Create a copy of Controller
 /// with the given fields replaced by the non-null parameter values.
@@ -245,7 +245,7 @@ class _Controller extends Controller {
 @override final  String? notes;
 /// Set while on loan: the station to return it to.
 @override final  String? loanReturnTo;
-/// Which session owes the return, as `s:<sessionId>` or `g:<groupId>`.
+/// Which session owes the return, as `s:<sessionId>`.
 @override final  String? loanSessionRef;
 @override final  DateTime updatedAt;
 

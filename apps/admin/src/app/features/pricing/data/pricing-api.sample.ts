@@ -166,7 +166,6 @@ export class SamplePricingApi extends PricingApi {
       this.usage.set('d-diwali', [
         {
           billId: '3f9a2c10-0000-4000-8000-000000000001',
-          kind: 'single',
           at: '2026-10-13T13:10:00.000Z',
           customer: 'Kiran Rao',
           billedPaise: 12000,

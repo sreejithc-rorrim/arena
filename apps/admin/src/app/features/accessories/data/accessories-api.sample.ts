@@ -25,7 +25,7 @@ function acc(id: string, label: string, home: string, o: Partial<Accessory> = {}
 }
 
 /**
- * Deterministic accessories on SampleFloorApi's stations: HEX-2 is lent to VOID (its group
+ * Deterministic accessories on SampleFloorApi's stations: HEX-2 is lent to VOID (its
  * session owes the return), VOID-2 is faulty, GHOST-1 missing, RIFT also has a VR headset. Writes
  * apply in memory like the server would and are recorded in `ops` (move ids blanked).
  */

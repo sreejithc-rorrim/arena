@@ -8,7 +8,6 @@ import {
   istDayStartOf,
 } from '../../../shared/time/ist';
 
-export type BillKind = 'single' | 'group';
 export type PayMethod = 'cash' | 'upi' | 'card' | 'other';
 export type PaymentStatus = 'unpaid' | 'partial' | 'paid' | 'waived';
 
@@ -33,11 +32,10 @@ export interface BillPayment {
   readonly by: string | null;
 }
 
-/** A closed bill (arena_sales): one single session or one group, completed or voided. */
+/** A closed bill (arena_sales): one session, completed or voided. */
 export interface Bill {
-  readonly kind: BillKind;
   readonly id: string;
-  /** Short display reference (`S-3F9A2C`, `G-71B0E4`); bills have no invoice number yet. */
+  /** Short display reference (`S-3F9A2C`); bills have no invoice number yet. */
   readonly ref: string;
   /** When it closed (ended, or voided while it ran). UTC ISO. */
   readonly at: string;
@@ -56,7 +54,7 @@ export interface Bill {
   readonly stations: readonly string[];
   readonly activities: readonly string[];
   readonly games: readonly string[];
-  /** Group: its players. Single: its largest controller count (1 without controllers). */
+  /** Its largest controller count (1 without controllers). */
   readonly players: number;
   /** Time played × the players on it. */
   readonly playerMinutes: number;
@@ -106,8 +104,6 @@ export function discountLabel(d: BillDiscount): string {
 }
 
 export interface BillLine {
-  /** Group player number; null on a single session. */
-  readonly player: number | null;
   readonly station: string;
   readonly activity: string;
   readonly controllers: number | null;
@@ -257,8 +253,8 @@ export function rangeBounds(range: SalesPreset, now: Date): { from: Date; to: Da
   return periodBounds(periodFor(range, undefined, undefined, now));
 }
 
-export function billRef(kind: BillKind, id: string): string {
-  return (kind === 'group' ? 'G-' : 'S-') + id.replace(/-/g, '').slice(0, 6).toUpperCase();
+export function billRef(id: string): string {
+  return 'S-' + id.replace(/-/g, '').slice(0, 6).toUpperCase();
 }
 
 export function playedMinutes(bill: Bill): number {
@@ -323,7 +319,8 @@ export function billFlags(bill: Bill, history: readonly BillHistoryEntry[] = [])
   if (notes.has(BILL_EDITED_NOTE) || history.some((h) => h.action === 'bill_adjust')) {
     out.push({ label: 'Edited', tone: 'warning' });
   }
-  if (history.some((h) => h.action === 'end_moved')) out.push({ label: 'End moved', tone: 'warning' });
+  if (history.some((h) => h.action === 'end_moved'))
+    out.push({ label: 'End moved', tone: 'warning' });
   if (bill.discountPaise > 0) out.push({ label: 'Discount', tone: 'success' });
   if (bill.refundedPaise > 0) out.push({ label: 'Refunded', tone: 'danger' });
   return out;

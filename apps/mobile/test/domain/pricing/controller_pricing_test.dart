@@ -7,7 +7,6 @@
 import 'package:arena_ops/core/money/paise.dart';
 import 'package:arena_ops/core/money/rounding.dart';
 import 'package:arena_ops/core/time/business_calendar.dart';
-import 'package:arena_ops/domain/entities/group_session.dart';
 import 'package:arena_ops/domain/entities/session.dart';
 import 'package:arena_ops/domain/pricing/billing_policy.dart';
 import 'package:arena_ops/domain/pricing/pricing_quote.dart';
@@ -15,7 +14,6 @@ import 'package:arena_ops/domain/pricing/pricing_rule.dart';
 import 'package:arena_ops/domain/pricing/pricing_service.dart';
 import 'package:arena_ops/domain/pricing/pricing_snapshot.dart';
 import 'package:arena_ops/domain/pricing/rate.dart';
-import 'package:arena_ops/domain/services/group_billing.dart';
 import 'package:arena_ops/domain/services/segment_billing.dart';
 import 'package:arena_ops/domain/services/session_planner.dart';
 import 'package:arena_ops/domain/value/enums.dart';
@@ -326,50 +324,6 @@ void main() {
             lastEnd: actual, scheduledEnd: booked),
       );
       expect(bill.total, const Paise(30000));
-    });
-  });
-
-  group('groups: controllers on one system are summed once', () {
-    GroupAssignment a(int player, String resource, int controllers) =>
-        GroupAssignment(
-          id: 'a$player',
-          groupId: 'g1',
-          playerNumber: player,
-          index: 0,
-          resourceId: resource,
-          activityCode: 'PS5',
-          controllerCount: controllers,
-          startedAt: evening,
-          createdAt: evening,
-        );
-
-    GroupBill bill(List<GroupAssignment> list, GroupBillingMode mode,
-            {int purchased = 0}) =>
-        const GroupBilling().bill(
-          snapshot: linearSnapshot(),
-          assignments: list,
-          mode: mode,
-          purchasedControllerCount: purchased,
-          groupStart: evening,
-          openEndAt: evening.add(const Duration(hours: 1)),
-        );
-
-    test('two players sharing one PS5 → the 2-controller row, ₹300', () {
-      final b = bill([a(1, 'hex', 1), a(2, 'hex', 1)], GroupBillingMode.perSystem);
-      expect(b.total, const Paise(30000));
-      expect(b.charges.single.controllerCount, 2);
-    });
-    test('two players on two PS5s → ₹150 + ₹150', () {
-      final b = bill([a(1, 'hex', 1), a(2, 'void', 1)], GroupBillingMode.perSystem);
-      expect(b.total, const Paise(30000));
-      expect(b.charges.length, 2);
-    });
-    test('pooled: 3 purchased controllers → the 3-controller row once, ₹450', () {
-      final b = bill([a(1, 'hex', 2), a(2, 'void', 1)],
-          GroupBillingMode.sharedControllerPool,
-          purchased: 3);
-      expect(b.total, const Paise(45000));
-      expect(b.charges.single.controllerCount, 3);
     });
   });
 }

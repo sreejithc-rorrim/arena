@@ -36,7 +36,7 @@ comment on column public.staff_profiles.user_id is 'The Supabase Auth login (aut
 
 comment on column public.staff_profiles.role is '''owner'' or ''staff''. An owner implicitly holds every permission (app_has_perm); op_staff_update keeps an owner''s perms complete and the row active.';
 
-comment on column public.staff_profiles.perms is 'Permission codes from _known_perms(): start, bill, discount, members, stations, money, reports, settings, attendance_review, leave_approve, payroll, payroll_finalise, bill_edit, bill_record, time_request. Holding money or reports makes the member owner level (app_is_owner).';
+comment on column public.staff_profiles.perms is 'Permission codes from _known_perms(): start, bill, discount, members, stations, money, reports, settings, bill_edit, bill_record. Holding money or reports makes the member owner level (app_is_owner).';
 
 comment on column public.staff_profiles.active is 'False revokes all access server-side: app_arena_ids and the permission helpers only consider active rows.';
 

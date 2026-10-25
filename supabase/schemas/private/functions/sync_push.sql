@@ -67,13 +67,11 @@ begin
     begin
       v_res := _sync_apply(p_arena, v_kind, coalesce(v_op->'payload', '{}'::jsonb));
       if v_res is null then raise exception 'unknown_op' using hint = coalesce(v_kind, 'null'); end if;
-      -- Configuration, permission and pay ops keep what they asked for (audit).
+      -- Configuration and permission ops keep what they asked for (audit).
       insert into sync_ops(op_id, arena_id, user_id, device_id, kind, status, result, payload)
         values (v_id, p_arena, auth.uid(), p_device, v_kind, 'applied', v_res,
           case when split_part(v_kind, '.', 1) in ('staff', 'arena', 'activity', 'resource', 'rate',
-                 'policy', 'settings', 'holiday', 'rule', 'discount', 'shift', 'staff_holiday',
-                 'hr_profile', 'pay_rate', 'pay_policy', 'salary_run', 'salary_adjustment')
-                 or v_kind = 'leave.adjust'
+                 'policy', 'settings', 'holiday', 'rule', 'discount')
                then v_op->'payload' end);
       v_out := v_out || jsonb_build_array(jsonb_build_object('op_id', v_id,
         'status', 'applied', 'result', v_res, 'replayed', false));

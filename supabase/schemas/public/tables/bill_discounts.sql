@@ -1,6 +1,6 @@
 -- bill_discounts — the discount applied to a bill (append-only, at most one per bill)
 --
--- Written by _discount_apply when session.end / group.end carries a discount.
+-- Written by _discount_apply when session.end carries a discount.
 -- Keeps a snapshot of what was applied (name, code, value) so later edits to
 -- the discount never change past bills, the amount taken off, the part of the
 -- bill it applied to (base_paise), who applied it and why. discount_id is null
@@ -9,8 +9,7 @@
 create table "public"."bill_discounts" (
   "id"           uuid                     not null default gen_random_uuid(),
   "arena_id"     uuid                     not null,
-  "session_id"   uuid,
-  "group_id"     uuid,
+  "session_id"   uuid                     not null,
   "discount_id"  uuid,
   "source"       text                     not null,
   "name"         text                     not null,
@@ -29,11 +28,8 @@ create table "public"."bill_discounts" (
     on delete cascade,
   constraint "bill_discounts_session_id_fkey" foreign key (session_id) references public.sessions(id)
     on delete cascade,
-  constraint "bill_discounts_group_id_fkey" foreign key (group_id) references public.group_sessions(id)
-    on delete cascade,
   -- Past bills keep their discount: a used discount is never deleted (op_discount_delete).
   constraint "bill_discounts_discount_id_fkey" foreign key (discount_id) references public.discounts(id),
-  constraint "bill_discounts_one_bill_check" check (((session_id is null) <> (group_id is null))),
   constraint "bill_discounts_source_check"
     check ((source = ANY (ARRAY['preset'::text, 'coupon'::text, 'manual'::text]))),
   constraint "bill_discounts_manual_check" check (((source = 'manual'::text) = (discount_id is null))),
@@ -43,7 +39,7 @@ create table "public"."bill_discounts" (
     check (((amount_paise >= 0) and (amount_paise <= base_paise)))
 );
 
-comment on table public.bill_discounts is 'The discount applied to a bill (session or group), with a snapshot of the discount, the amount taken off, who applied it and why. Append-only; one per bill.';
+comment on table public.bill_discounts is 'The discount applied to a session''s bill, with a snapshot of the discount, the amount taken off, who applied it and why. Append-only; one per bill.';
 
 comment on column public.bill_discounts.arena_id is 'Owning arena (tenant). RLS limits reads to members holding bill, money or reports.';
 
@@ -71,9 +67,6 @@ alter table "public"."bill_discounts"
 create unique index ux_bill_discounts_session on public.bill_discounts using btree (session_id)
   where (session_id is not null);
 
-create unique index ux_bill_discounts_group on public.bill_discounts using btree (group_id)
-  where (group_id is not null);
-
 create index ix_bill_discounts_discount on public.bill_discounts using btree (discount_id, applied_at);
 
 create index ix_bill_discounts_sync on public.bill_discounts using btree (arena_id, sync_xid);
@@ -92,8 +85,7 @@ create trigger t_same_arena
   before insert or update on public.bill_discounts
   for each row
   execute function
-    public._assert_same_arena('session_id', 'sessions', 'group_id', 'group_sessions',
-      'discount_id', 'discounts');
+    public._assert_same_arena('session_id', 'sessions', 'discount_id', 'discounts');
 
 -- Append-only: corrections are new rows (_append_only).
 create trigger t_bill_discounts_append_only

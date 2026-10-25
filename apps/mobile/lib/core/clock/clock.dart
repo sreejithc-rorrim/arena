@@ -50,7 +50,7 @@ class OffsetClock implements Clock {
 
 /// What the device's own clock says now — [clock] without any server
 /// correction. Only for records that keep the phone's time as evidence next to
-/// the server's (a clock-in's device_at); never for business rules.
+/// the server's (a terms acceptance's device_at); never for business rules.
 DateTime deviceNow(Clock clock) => switch (clock) {
       OffsetClock(:final offset) => clock.now().subtract(offset),
       _ => clock.now(),

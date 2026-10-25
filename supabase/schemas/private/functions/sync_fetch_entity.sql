@@ -6,7 +6,7 @@
 --
 -- Used by a device after the server refuses one of its ops: it replaces its
 -- copy of the affected entity with these rows. p_refs is a jsonb array of
--- {type, id}, type in session | group | controller | customer | booking.
+-- {type, id}, type in session | controller | customer | booking.
 -- Returns [{ref, rows: [{t: table name, r: row}]}], one entry per ref; an
 -- unknown type or missing id gives rows = []. SECURITY DEFINER; any active
 -- member of p_arena may call it (no permission check), else 'forbidden' (42501).
@@ -34,8 +34,8 @@ begin
   end if;
   for v_ref in select value from jsonb_array_elements(coalesce(p_refs, '[]'::jsonb)) loop
     v_id := nullif(v_ref->>'id', '')::uuid;
-    -- controller_moves point at their session/group via session_ref
-    -- ('s:<session id>' or 'g:<group id>'), not a uuid column.
+    -- controller_moves point at their session via session_ref
+    -- ('s:<session id>'), not a uuid column.
     v_rows := case v_ref->>'type'
       when 'session' then (
         select coalesce(jsonb_agg(x), '[]'::jsonb) from (
@@ -46,16 +46,6 @@ begin
           union all select jsonb_build_object('t','payments','r',to_jsonb(s)) from payments s where s.arena_id = p_arena and s.session_id = v_id
           union all select jsonb_build_object('t','controller_allocations','r',to_jsonb(s)) from controller_allocations s where s.arena_id = p_arena and s.session_id = v_id
           union all select jsonb_build_object('t','controller_moves','r',to_jsonb(s)) from controller_moves s where s.arena_id = p_arena and s.session_ref = 's:' || v_id::text
-        ) q)
-      when 'group' then (
-        select coalesce(jsonb_agg(x), '[]'::jsonb) from (
-          select jsonb_build_object('t','group_sessions','r',to_jsonb(s)) x from group_sessions s where s.arena_id = p_arena and s.id = v_id
-          union all select jsonb_build_object('t','group_assignments','r',to_jsonb(s)) from group_assignments s where s.arena_id = p_arena and s.group_id = v_id
-          union all select jsonb_build_object('t','group_extensions','r',to_jsonb(s)) from group_extensions s where s.arena_id = p_arena and s.group_id = v_id
-          union all select jsonb_build_object('t','group_charges','r',to_jsonb(s)) from group_charges s where s.arena_id = p_arena and s.group_id = v_id
-          union all select jsonb_build_object('t','group_payments','r',to_jsonb(s)) from group_payments s where s.arena_id = p_arena and s.group_id = v_id
-          union all select jsonb_build_object('t','controller_allocations','r',to_jsonb(s)) from controller_allocations s where s.arena_id = p_arena and s.group_id = v_id
-          union all select jsonb_build_object('t','controller_moves','r',to_jsonb(s)) from controller_moves s where s.arena_id = p_arena and s.session_ref = 'g:' || v_id::text
         ) q)
       when 'controller' then (
         select coalesce(jsonb_agg(x), '[]'::jsonb) from (
@@ -81,7 +71,7 @@ begin
 end;
 $function$;
 
-comment on function private.sync_fetch_entity(uuid, jsonb) is 'Client API (sync): for each {type, id} ref, return the server''s current rows for that whole entity (session, group, controller, customer or booking) so a device can replace its copy after a refused op.';
+comment on function private.sync_fetch_entity(uuid, jsonb) is 'Client API (sync): for each {type, id} ref, return the server''s current rows for that whole entity (session, controller, customer or booking) so a device can replace its copy after a refused op.';
 
 grant execute
   on function "private"."sync_fetch_entity"(uuid, jsonb)

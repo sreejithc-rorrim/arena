@@ -11,7 +11,13 @@ import {
 import { MatButton } from '@angular/material/button';
 import { MatChipListbox, MatChipOption } from '@angular/material/chips';
 import { MatDialog } from '@angular/material/dialog';
-import { MatFormField, MatHint, MatLabel, MatPrefix, MatSuffix } from '@angular/material/form-field';
+import {
+  MatFormField,
+  MatHint,
+  MatLabel,
+  MatPrefix,
+  MatSuffix,
+} from '@angular/material/form-field';
 import { MatIcon } from '@angular/material/icon';
 import { MatInput } from '@angular/material/input';
 import { MatOption, MatSelect } from '@angular/material/select';
@@ -170,7 +176,9 @@ const USES_PAGE = 20;
             [value]="d.name"
             (input)="set({ name: $any($event.target).value })"
           />
-          <mat-hint>{{ coupon() ? 'For you; staff type the code' : 'What staff pick at checkout' }}</mat-hint>
+          <mat-hint>{{
+            coupon() ? 'For you; staff type the code' : 'What staff pick at checkout'
+          }}</mat-hint>
         </mat-form-field>
         @if (coupon()) {
           <mat-form-field>
@@ -310,7 +318,10 @@ const USES_PAGE = 20;
       </app-detail-section>
 
       @if (discount()) {
-        <app-detail-section heading="Used on" subtitle="Newest first; voided bills no longer count.">
+        <app-detail-section
+          heading="Used on"
+          subtitle="Newest first; voided bills no longer count."
+        >
           @if (usage.error()) {
             <p role="alert" class="text-[13px] leading-[1.45] text-danger">
               The bills couldn't load.
@@ -428,7 +439,7 @@ export class DiscountDetail {
   });
 
   protected useLine(u: DiscountUse): string {
-    const parts = [billRef(u.kind, u.billId), `${formatDate(u.at)}, ${formatTime(u.at)}`];
+    const parts = [billRef(u.billId), `${formatDate(u.at)}, ${formatTime(u.at)}`];
     if (u.status === 'voided') parts.push('Void');
     else if (u.billedPaise != null) parts.push(`billed ${formatRupees(u.billedPaise)}`);
     return parts.join(' · ');

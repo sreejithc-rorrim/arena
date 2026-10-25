@@ -51,7 +51,7 @@ describe('Sales', () => {
     await t.settle();
     expect(t.url()).toBe('/sales?method=cash');
     expect(titles()).toEqual(['Aditya Shah', 'Guest']);
-    // The split group bill keeps its UPI part: it is named as such, not counted as cash.
+    // The split bill keeps its UPI part: it is named as such, not counted as cash.
     expect(summary()).toBe('2 bills paid by Cash · Cash ₹280 · UPI ₹500');
     expect(totals()).toBe('Expected ₹780 Collected ₹780 Outstanding ₹0');
   });
@@ -262,13 +262,13 @@ describe('Sales', () => {
     t = await startPage('/sales?id=71b0e4aa-0000-4000-8000-000000000002');
     t.button('Void', detail()!)?.click();
     await t.settle();
-    expect(t.dialog()?.querySelector('h2')?.textContent).toContain('Void G-71B0E4?');
+    expect(t.dialog()?.querySelector('h2')?.textContent).toContain('Void S-71B0E4?');
     expect(t.text(t.dialog())).toContain('₹720 was collected on it; voiding does not refund it.');
     t.button('Void bill', t.dialog()!)?.click();
     await t.settle();
     expect(t.dialog()).toBeNull();
-    expect(t.snack()).toBe('G-71B0E4 voided');
-    expect(bill('G-71B0E4').voidReason).toBe('Wrong amount');
+    expect(t.snack()).toBe('S-71B0E4 voided');
+    expect(bill('S-71B0E4').voidReason).toBe('Wrong amount');
     expect(trailing(t.rows()[1])).toEqual(['—', 'Void']);
     expect(summary()).toBe('3 bills · UPI ₹440 · Cash ₹60 · ₹720 on voided bills');
     expect(totals()).toBe('Expected ₹660 Collected ₹500 Outstanding ₹160');
@@ -303,7 +303,7 @@ describe('Sales', () => {
     t = await startPage('/sales?id=71b0e4aa-0000-4000-8000-000000000002');
     expect(t.button('Void', detail()!)).toBeDefined();
     // Another owner voids it; the realtime nudge refreshes the store.
-    await t.sales.void('', bill('G-71B0E4'), 'Duplicate');
+    await t.sales.void('', bill('S-71B0E4'), 'Duplicate');
     await TestBed.inject(SalesStore).refresh();
     await t.settle();
     expect(t.text(detail())).toContain('Voided · Duplicate');
@@ -381,7 +381,6 @@ describe('sales helpers', () => {
 
   it('the summary reconciles: expected + overpaid = collected + outstanding + written off', () => {
     const bill = (o: Partial<Bill>): Bill => ({
-      kind: 'single',
       id: crypto.randomUUID(),
       ref: 'S-1',
       at: NOW.toISOString(),
@@ -476,9 +475,9 @@ describe('sales helpers', () => {
   it('numbers each business day in start order', () => {
     const today = day(0);
     const no = dayNumbers(today);
-    // Today's bills started 11:30 (RIFT), 2:35 (GHOST), 3:45 (VOID group), 5:40 pm (HEX).
+    // Today's bills started 11:30 (RIFT), 2:35 (GHOST), 3:45 (VOID), 5:40 pm (HEX).
     expect(today.map((b) => `${b.ref}:${no.get(b.id)}`).sort()).toEqual([
-      'G-71B0E4:3',
+      'S-71B0E4:3',
       'S-0E55B9:1',
       'S-3F9A2C:4',
       'S-C41D7E:2',
@@ -512,7 +511,6 @@ describe('sales helpers', () => {
       'No.',
       'Bill',
       'Bill ID',
-      'Type',
       'Start',
       'End',
       'Minutes',
@@ -543,15 +541,15 @@ describe('sales helpers', () => {
     ]);
     // Oldest first, numbered per day.
     expect(lines[head + 1]).toBe(
-      '2026-10-13,1,S-0E55B9,0e55b981-0000-4000-8000-000000000004,Single,11:30,13:30,120,2.00,RIFT,PlayStation 5,Gran Turismo 7,1,2.00,Meera Pillai,New,360.00,360.00,0.00,200.00,0.00,0.00,200.00,0.00,160.00,0.00,Part paid,,,,Priya Nair,2026-10-13 11:30',
+      '2026-10-13,1,S-0E55B9,0e55b981-0000-4000-8000-000000000004,11:30,13:30,120,2.00,RIFT,PlayStation 5,Gran Turismo 7,1,2.00,Meera Pillai,New,360.00,360.00,0.00,200.00,0.00,0.00,200.00,0.00,160.00,0.00,Part paid,,,,Priya Nair,2026-10-13 11:30',
     );
     expect(lines[head + 4]).toBe(
-      '2026-10-13,4,S-3F9A2C,3f9a2c10-0000-4000-8000-000000000001,Single,17:40,18:40,60,1.00,HEX,PlayStation 5,EA SPORTS FC 25,2,2.00,Kiran Rao,Returning,240.00,240.00,0.00,240.00,0.00,0.00,240.00,0.00,0.00,0.00,Paid,,,,Priya Nair,2026-10-13 17:40',
+      '2026-10-13,4,S-3F9A2C,3f9a2c10-0000-4000-8000-000000000001,17:40,18:40,60,1.00,HEX,PlayStation 5,EA SPORTS FC 25,2,2.00,Kiran Rao,Returning,240.00,240.00,0.00,240.00,0.00,0.00,240.00,0.00,0.00,0.00,Paid,,,,Priya Nair,2026-10-13 17:40',
     );
     const total = lines[head + 5].split(',');
     expect(total[0]).toBe('Total — 4 bills (voided bills excluded)');
-    expect([total[7], total[8], total[13]]).toEqual(['300', '5.00', '10.50']);
-    expect(total.slice(16, 26)).toEqual([
+    expect([total[6], total[7], total[12]]).toEqual(['300', '5.00', '10.50']);
+    expect(total.slice(15, 25)).toEqual([
       '1380.00',
       '1380.00',
       '280.00',
@@ -571,9 +569,9 @@ describe('sales helpers', () => {
     const bills = billsCsv(yesterday, META).trim().split('\n');
     const counted = bills.find((l) => l.startsWith('Total —'))!.split(',');
     const voided = bills.find((l) => l.startsWith('On 1 voided bill '))!.split(',');
-    expect(counted[22]).toBe('120.00');
-    expect(voided[22]).toBe('120.00');
-    expect(voided[17]).toBe('0.00');
+    expect(counted[21]).toBe('120.00');
+    expect(voided[21]).toBe('120.00');
+    expect(voided[16]).toBe('0.00');
 
     const lines = paymentsCsv(yesterday, META).trim().split('\n');
     const head = lines.findIndex((l) => l.startsWith('Received date,'));
@@ -585,6 +583,6 @@ describe('sales helpers', () => {
       'Net total,,,,,,,,,240.00',
     ]);
     // Collected on bills that count + on voided bills = the ledger's net.
-    expect(Number(counted[22]) + Number(voided[22])).toBe(240);
+    expect(Number(counted[21]) + Number(voided[21])).toBe(240);
   });
 });

@@ -55,10 +55,6 @@ void main() {
     await tester.tap(find.text('New Session'));
     await settle(tester);
 
-    // The FAB now offers Single vs Group; pick the single-session flow.
-    await tester.tap(find.text('Single session'));
-    await settle(tester);
-
     // Presets plus Custom and Open (spec §12 custom duration).
     expect(find.text('60 min'), findsOneWidget);
     expect(find.text('Custom'), findsOneWidget);

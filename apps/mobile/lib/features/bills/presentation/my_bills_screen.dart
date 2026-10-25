@@ -222,7 +222,7 @@ class _BillRow extends StatelessWidget {
       _ => null,
     };
     return ArenaListRow(
-      icon: b.isGroup ? Icons.groups_rounded : Icons.receipt_long_outlined,
+      icon: Icons.receipt_long_outlined,
       title: [
         b.guest || b.customer == null ? 'Guest' : b.customer!,
         if (b.stations.isNotEmpty) b.stations.join(', '),

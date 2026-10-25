@@ -8,22 +8,14 @@ import { Session } from '../auth/session';
 import { Router } from '@angular/router';
 import { FloorStore } from '../floor/floor-store';
 import { AccessoriesStore } from '../../features/accessories/data/accessories-store';
-import { AttendanceStore } from '../../features/attendance/data/attendance-store';
-import { AttendanceRulesStore } from '../../features/settings/data/attendance-rules';
-import { WorkHoursStore } from '../../features/settings/data/work-hours';
-import { CalendarStore } from '../../features/calendar/data/calendar-store';
-import { ShiftsStore } from '../../features/shifts/data/shifts-store';
-import { LeaveStore } from '../../features/leave/data/leave-store';
-import { LeaveRulesStore } from '../../features/settings/data/leave-rules';
-import { PaySetupStore } from '../../features/pay-setup/data/pay-setup-store';
-import { PayrollStore } from '../../features/payroll/data/payroll-store';
 import { FloorOptionsStore } from '../../features/settings/data/floor-options';
 import { OverviewStore } from '../../features/overview/data/overview-store';
 import { PricingStore } from '../../features/pricing/data/pricing-store';
 import { SalesStore } from '../../features/sales/data/sales-store';
+import { TeamStore } from '../../features/team/data/team-store';
 import { UsersStore } from '../../features/users/data/users-store';
 import { Supabase } from '../supabase/supabase';
-import { DEBOUNCE_MS, RealtimeSync, TABLE_TARGETS, targetsForKind } from './realtime-sync';
+import { DEBOUNCE_MS, RealtimeSync, TABLE_TARGETS } from './realtime-sync';
 
 /** Past the debounce window. */
 const AFTER = DEBOUNCE_MS + 10;
@@ -38,15 +30,7 @@ describe('RealtimeSync', () => {
   let mockFloorOptions: { refresh: Mock; stale: Mock };
   let mockUsers: { refresh: Mock; stale: Mock };
   let mockAccessories: { refresh: Mock; stale: Mock };
-  let mockAttendance: { refresh: Mock; stale: Mock };
-  let mockAttendanceRules: { refresh: Mock; stale: Mock };
-  let mockWorkHours: { refresh: Mock; stale: Mock };
-  let mockShifts: { refresh: Mock; stale: Mock };
-  let mockCalendar: { refresh: Mock; stale: Mock };
-  let mockLeave: { refresh: Mock; stale: Mock };
-  let mockLeaveRules: { refresh: Mock; stale: Mock };
-  let mockPaySetup: { refresh: Mock; stale: Mock };
-  let mockPayroll: { refresh: Mock; stale: Mock };
+  let mockTeam: { refresh: Mock; stale: Mock };
   /** The screen the dashboard shows (RealtimeSync reloads only what it needs). */
   const router = { url: '/sales' };
   let mockArenaContext: { current: ReturnType<typeof vi.fn>; load: ReturnType<typeof vi.fn> };
@@ -112,15 +96,7 @@ describe('RealtimeSync', () => {
     mockFloorOptions = store();
     mockUsers = store();
     mockAccessories = store();
-    mockAttendance = store();
-    mockAttendanceRules = store();
-    mockWorkHours = store();
-    mockShifts = store();
-    mockCalendar = store();
-    mockLeave = store();
-    mockLeaveRules = store();
-    mockPaySetup = store();
-    mockPayroll = store();
+    mockTeam = store();
     router.url = '/sales';
     user = signal<Account | null>({ id: 'u0', email: 'arjun@404arena.in', name: 'Arjun Mehra' });
 
@@ -147,15 +123,7 @@ describe('RealtimeSync', () => {
         { provide: FloorOptionsStore, useValue: mockFloorOptions },
         { provide: UsersStore, useValue: mockUsers },
         { provide: AccessoriesStore, useValue: mockAccessories },
-        { provide: AttendanceStore, useValue: mockAttendance },
-        { provide: AttendanceRulesStore, useValue: mockAttendanceRules },
-        { provide: WorkHoursStore, useValue: mockWorkHours },
-        { provide: ShiftsStore, useValue: mockShifts },
-        { provide: CalendarStore, useValue: mockCalendar },
-        { provide: LeaveStore, useValue: mockLeave },
-        { provide: LeaveRulesStore, useValue: mockLeaveRules },
-        { provide: PaySetupStore, useValue: mockPaySetup },
-        { provide: PayrollStore, useValue: mockPayroll },
+        { provide: TeamStore, useValue: mockTeam },
         { provide: Router, useValue: router },
       ],
     });
@@ -218,11 +186,6 @@ describe('RealtimeSync', () => {
         'game_controls',
         'game_resources',
         'games',
-        'group_assignments',
-        'group_charges',
-        'group_extensions',
-        'group_payments',
-        'group_sessions',
         'holidays',
         'payments',
         'rate_bands',
@@ -346,19 +309,7 @@ describe('RealtimeSync', () => {
     expect(mockArenaContext.load).toHaveBeenCalledWith(true);
     expect(mockSales.refresh).not.toHaveBeenCalled();
 
-    for (const table of [
-      'group_sessions',
-      'group_assignments',
-      'group_payments',
-      'group_extensions',
-    ]) {
-      fire(table, '/overview');
-      expect(mockFloor.refresh).toHaveBeenCalledWith(['live', 'stationFigures', 'gameFigures']);
-      expect(mockOverview.refresh).toHaveBeenCalledTimes(1);
-      expect(mockSales.stale).toHaveBeenCalledTimes(1);
-    }
-
-    for (const table of ['session_charges', 'group_charges', 'bill_discounts']) {
+    for (const table of ['session_charges', 'bill_discounts']) {
       fire(table, '/sales');
       expect(mockSales.refresh).toHaveBeenCalledTimes(1);
       expect(mockOverview.stale).toHaveBeenCalledTimes(1);
@@ -486,137 +437,6 @@ describe('RealtimeSync', () => {
     expect(mockSales.refresh).toHaveBeenCalledTimes(1);
     expect(mockOverview.stale).toHaveBeenCalledTimes(1);
     expect(mockPricing.refresh).not.toHaveBeenCalled();
-  });
-
-  it('a clock-in or clock-out reloads the attendance log only where it is shown', async () => {
-    router.url = '/staff/attendance?range=30d';
-    await sync.setupArena('arena-123', true);
-    broadcast({
-      arena_id: 'arena-123',
-      kind: 'push',
-      kinds: ['attendance.punch'],
-      source: 'mobile',
-    });
-    vi.advanceTimersByTime(AFTER);
-    expect(mockAttendance.refresh).toHaveBeenCalledTimes(1);
-    expect(mockSales.refresh).not.toHaveBeenCalled();
-    expect(mockSales.stale).not.toHaveBeenCalled();
-    expect(mockPricing.stale).not.toHaveBeenCalled();
-    expect(mockFloor.stale).not.toHaveBeenCalled();
-
-    vi.clearAllMocks();
-    router.url = '/sales';
-    broadcast({ arena_id: 'arena-123', kind: 'push', kinds: ['attendance.punch'] });
-    vi.advanceTimersByTime(AFTER);
-    expect(mockAttendance.refresh).not.toHaveBeenCalled();
-    expect(mockAttendance.stale).toHaveBeenCalledTimes(1);
-  });
-
-  it('a saved setting reloads the attendance rules on Settings and the attendance log', async () => {
-    router.url = '/staff/attendance';
-    await sync.setupArena('arena-123', true);
-    broadcast({ arena_id: 'arena-123', kind: 'push', kinds: ['settings.save'] });
-    vi.advanceTimersByTime(AFTER);
-    expect(mockAttendanceRules.refresh).toHaveBeenCalledTimes(1);
-
-    vi.clearAllMocks();
-    router.url = '/overview';
-    broadcast({ arena_id: 'arena-123', kind: 'push', kinds: ['settings.save'] });
-    vi.advanceTimersByTime(AFTER);
-    expect(mockAttendanceRules.stale).toHaveBeenCalledTimes(1);
-  });
-
-  it('shift and staff-holiday pushes reload the shifts and the calendar on Staff screens', async () => {
-    expect(targetsForKind('shift.upsert')).toEqual(['shifts']);
-    expect(targetsForKind('shift.assign')).toEqual(['shifts']);
-    expect(targetsForKind('staff_holiday.delete')).toEqual(['shifts']);
-    router.url = '/staff/attendance?view=calendar';
-    await sync.setupArena('arena-123', true);
-    broadcast({ arena_id: 'arena-123', kind: 'push', kinds: ['shift.assign'] });
-    vi.advanceTimersByTime(AFTER);
-    expect(mockShifts.refresh).toHaveBeenCalledTimes(1);
-    expect(mockCalendar.refresh).toHaveBeenCalledTimes(1);
-    expect(mockAttendance.refresh).not.toHaveBeenCalled();
-
-    // The schedule itself (Settings › Staff › Schedule) shows the shifts, not the calendar.
-    vi.clearAllMocks();
-    router.url = '/settings/staff/schedule/sh1';
-    broadcast({ arena_id: 'arena-123', kind: 'push', kinds: ['shift.upsert'] });
-    vi.advanceTimersByTime(AFTER);
-    expect(mockShifts.refresh).toHaveBeenCalledTimes(1);
-    expect(mockCalendar.stale).toHaveBeenCalledTimes(1);
-
-    vi.clearAllMocks();
-    router.url = '/sales';
-    broadcast({ arena_id: 'arena-123', kind: 'push', kinds: ['staff_holiday.upsert'] });
-    vi.advanceTimersByTime(AFTER);
-    expect(mockShifts.stale).toHaveBeenCalledTimes(1);
-    expect(mockCalendar.stale).toHaveBeenCalledTimes(1);
-    expect(mockShifts.refresh).not.toHaveBeenCalled();
-  });
-
-  it('corrections reload the log and the calendar; a saved setting the working hours', async () => {
-    router.url = '/staff/attendance?view=calendar&month=2026-10';
-    await sync.setupArena('arena-123', true);
-    broadcast({ arena_id: 'arena-123', kind: 'push', kinds: ['attendance.correct'] });
-    vi.advanceTimersByTime(AFTER);
-    expect(mockAttendance.refresh).toHaveBeenCalledTimes(1);
-    expect(mockCalendar.refresh).toHaveBeenCalledTimes(1);
-
-    vi.clearAllMocks();
-    router.url = '/settings?id=workhours';
-    broadcast({ arena_id: 'arena-123', kind: 'push', kinds: ['settings.save'] });
-    vi.advanceTimersByTime(AFTER);
-    expect(mockWorkHours.refresh).toHaveBeenCalledTimes(1);
-    expect(mockCalendar.stale).toHaveBeenCalledTimes(1);
-  });
-
-  it('leave and pay pushes reload their own screen only; elsewhere they are marked stale', async () => {
-    expect(targetsForKind('leave.decide')).toEqual(['leave']);
-    expect(targetsForKind('hr_profile.save')).toEqual(['pay', 'leave']);
-    expect(targetsForKind('pay_rate.add')).toEqual(['pay']);
-    expect(targetsForKind('pay_policy.add')).toEqual(['pay']);
-    expect(targetsForKind('salary_run.finalise')).toEqual(['pay']);
-    expect(targetsForKind('salary_adjustment.add')).toEqual(['pay']);
-    router.url = '/staff/attendance/leave?id=lr1';
-    await sync.setupArena('arena-123', true);
-    broadcast({ arena_id: 'arena-123', kind: 'push', kinds: ['leave.decide'] });
-    vi.advanceTimersByTime(AFTER);
-    expect(mockLeave.refresh).toHaveBeenCalledTimes(1);
-    expect(mockPayroll.refresh).not.toHaveBeenCalled();
-
-    vi.clearAllMocks();
-    router.url = '/staff/payroll?id=r1';
-    broadcast({ arena_id: 'arena-123', kind: 'push', kinds: ['salary_run.set_deduction'] });
-    vi.advanceTimersByTime(AFTER);
-    expect(mockPayroll.refresh).toHaveBeenCalledTimes(1);
-    expect(mockPaySetup.stale).toHaveBeenCalledTimes(1);
-    expect(mockLeave.refresh).not.toHaveBeenCalled();
-
-    // Pay setup and leave balances live on Team (/staff/pay-setup redirects there).
-    vi.clearAllMocks();
-    router.url = '/staff/team?id=st1';
-    broadcast({ arena_id: 'arena-123', kind: 'push', kinds: ['hr_profile.save'] });
-    vi.advanceTimersByTime(AFTER);
-    expect(mockPaySetup.refresh).toHaveBeenCalledTimes(1);
-    expect(mockLeave.refresh).toHaveBeenCalledTimes(1);
-    expect(mockPayroll.stale).toHaveBeenCalledTimes(1);
-
-    vi.clearAllMocks();
-    router.url = '/staff/payroll?id=r1';
-    broadcast({ arena_id: 'arena-123', kind: 'push', kinds: ['hr_profile.save'] });
-    vi.advanceTimersByTime(AFTER);
-    expect(mockPayroll.refresh).toHaveBeenCalledTimes(1);
-    expect(mockPaySetup.stale).toHaveBeenCalledTimes(1);
-    expect(mockLeave.stale).toHaveBeenCalledTimes(1);
-    expect(mockLeave.refresh).not.toHaveBeenCalled();
-
-    vi.clearAllMocks();
-    router.url = '/settings/staff/leave';
-    broadcast({ arena_id: 'arena-123', kind: 'push', kinds: ['settings.save'] });
-    vi.advanceTimersByTime(AFTER);
-    expect(mockLeaveRules.refresh).toHaveBeenCalledTimes(1);
-    expect(mockLeave.stale).toHaveBeenCalledTimes(1);
   });
 
   it('reads a bare-map nudge (an older floor app) as the nudge itself', async () => {

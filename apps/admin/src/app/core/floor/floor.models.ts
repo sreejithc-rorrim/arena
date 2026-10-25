@@ -75,17 +75,15 @@ export interface Customer {
   readonly birthYear: number | null;
 }
 
-export type BillKind = 'single' | 'group';
 export type BillStatus = 'active' | 'completed' | 'voided';
 
 /**
- * One stretch of play on a station: a single session's segment or a group player's assignment.
- * Open while `endedAt` is null and the bill is active.
+ * One stretch of play on a station: a session's segment. Open while `endedAt` is null and the
+ * bill is active.
  */
 export interface Play {
   readonly id: string;
-  readonly kind: BillKind;
-  /** Session or group id (the Sales screen's bill id). */
+  /** Session id (the Sales screen's bill id). */
   readonly billId: string;
   readonly billStatus: BillStatus;
   readonly customerId: string;
@@ -99,9 +97,8 @@ export interface Play {
   readonly scheduledEndAt: string;
 }
 
-/** A billed line (session_charges / group_charges) of a bill that was not voided. */
+/** A billed line (session_charges) of a bill that was not voided. */
 export interface Charge {
-  readonly kind: BillKind;
   readonly billId: string;
   readonly resourceId: string | null;
   readonly activityCode: string;
@@ -110,9 +107,8 @@ export interface Charge {
   readonly amountPaise: number;
 }
 
-/** A bill seen from its customer (sessions / group_sessions by customer). */
+/** A bill seen from its customer (sessions by customer). */
 export interface Visit {
-  readonly kind: BillKind;
   readonly id: string;
   readonly customerId: string;
   readonly status: BillStatus;
@@ -127,9 +123,9 @@ export interface Visit {
  * owner asks to delete; game.delete checks again on the server under a lock.
  */
 export interface GameUsage {
-  /** Stations playing it right now (open session segments and group players). */
+  /** Stations playing it right now (open session segments). */
   readonly playingNow: number;
-  /** Session segments, group players and bookings that name it, past or present. */
+  /** Session segments and bookings that name it, past or present. */
   readonly records: number;
 }
 
@@ -153,7 +149,7 @@ export type FloorState = 'playing' | 'free' | 'oos';
 export interface LiveStation {
   readonly station: Station;
   readonly state: FloorState;
-  /** Open plays on it (a group can put several players on one station). */
+  /** Open plays on it. */
   readonly plays: readonly Play[];
   readonly gameId: string | null;
   readonly players: number;
@@ -186,7 +182,7 @@ export function liveStations(stations: readonly Station[], plays: readonly Play[
           ? 'free'
           : 'oos';
       const ends = on.map((p) => p.scheduledEndAt).sort();
-      const players = on.reduce((n, p) => n + (p.kind === 'group' ? 1 : (p.controllers ?? 1)), 0);
+      const players = on.reduce((n, p) => n + (p.controllers ?? 1), 0);
       return {
         station,
         state,
@@ -248,7 +244,6 @@ export interface GameFan {
 /** A bill in a station's or member's recent play (arena_activity). */
 export interface ActivityBill {
   readonly billId: string;
-  readonly kind: BillKind;
   readonly startedAt: string;
   readonly status: BillStatus;
   readonly billedPaise: number | null;
@@ -261,7 +256,11 @@ export interface ActivityBill {
 /** A station's or member's recent bills, and a member's minutes per game (arena_activity). */
 export interface Activity {
   readonly bills: readonly ActivityBill[];
-  readonly games: readonly { readonly gameId: string; readonly name: string; readonly minutes: number }[];
+  readonly games: readonly {
+    readonly gameId: string;
+    readonly name: string;
+    readonly minutes: number;
+  }[];
 }
 
 /** A registered member with their figures, one row of a page (arena_members). */

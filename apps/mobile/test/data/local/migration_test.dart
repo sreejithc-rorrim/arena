@@ -998,4 +998,113 @@ void main() {
       expect(await LocalSessionRepository(db).getById(id), isNotNull);
     });
   });
+
+  /// A genuine v18 database: the group tables and the group-only columns of
+  /// controller_allocations (with their indexes) back, one closed single-session
+  /// pad row, one open group pad row, and one paid session.
+  Future<String> buildV18Database() async {
+    final db = AppDatabase(NativeDatabase(file));
+    await LocalSeed.apply(db);
+    final id = await paidHour(db);
+    await db.close();
+    final raw = sqlite3.open(file.path);
+    for (final c in const [
+      'group_id TEXT',
+      'assignment_id TEXT',
+      'player_number INTEGER',
+      'player_label TEXT',
+    ]) {
+      raw.execute('ALTER TABLE controller_allocations ADD COLUMN $c');
+    }
+    raw.execute(
+        'CREATE INDEX ix_alloc_group ON controller_allocations (group_id)');
+    raw.execute('CREATE INDEX ix_alloc_assignment '
+        'ON controller_allocations (assignment_id)');
+    for (final t in const [
+      'group_sessions',
+      'group_assignments',
+      'group_extensions',
+      'group_charges',
+      'group_payments',
+    ]) {
+      raw.execute('CREATE TABLE $t (id TEXT NOT NULL PRIMARY KEY)');
+    }
+    raw.execute("INSERT INTO group_sessions (id) VALUES ('g1')");
+    raw.execute("INSERT INTO group_payments (id) VALUES ('gp1')");
+    const at = '2026-10-10T09:00:00.000Z';
+    raw.execute(
+        'INSERT INTO controller_allocations (id, controller_id, scope, '
+        'session_id, segment_id, resource_id, activity_code, started_at, '
+        'ended_at, created_at) VALUES '
+        "('a_single', 'ctl_hex_1', 'single', ?, 'seg1', 'hex', 'PS5', ?, ?, ?)",
+        [id, at, '2026-10-10T10:00:00.000Z', at]);
+    raw.execute(
+        'INSERT INTO controller_allocations (id, controller_id, scope, '
+        'group_id, assignment_id, player_number, resource_id, activity_code, '
+        'started_at, created_at) VALUES '
+        "('a_group', 'ctl_void_1', 'group', 'g1', 'as1', 1, 'void', 'PS5', ?, ?)",
+        [at, at]);
+    raw.execute('PRAGMA user_version = 18');
+    raw.close();
+    return id;
+  }
+
+  group('v18 -> v19 (group sessions removed)', () {
+    test('the group tables and columns go with the group pad rows; '
+        'single-session pads, sessions and payments are untouched', () async {
+      final id = await buildV18Database();
+      final before = sqlite3.open(file.path);
+      expect(before.userVersion, 18);
+      before.close();
+
+      final db = AppDatabase(NativeDatabase(file));
+      addTearDown(db.close);
+      expect(db.rebuiltFromVersion, 0, reason: 'sequential, not a rebuild');
+      final pads = await db.select(db.controllerAllocations).get();
+      expect(pads.map((a) => a.id), ['a_single']);
+      expect(pads.single.sessionId, id);
+      expect(pads.single.endedAt, DateTime.utc(2026, 10, 10, 10));
+
+      final sessions = LocalSessionRepository(db);
+      final done = (await sessions.getById(id))!;
+      expect((await sessions.paymentsFor(id)).single.amountPaise,
+          done.billedAmountPaise);
+
+      final check = sqlite3.open(file.path);
+      expect(
+          check
+              .select("SELECT name FROM sqlite_master WHERE type = 'table' "
+                  "AND name LIKE 'group_%'")
+              .isEmpty,
+          isTrue);
+      final columns = check
+          .select("SELECT name FROM pragma_table_info('controller_allocations')")
+          .map((r) => '${r['name']}')
+          .toSet();
+      expect(columns, isNot(contains('group_id')));
+      expect(columns, isNot(contains('assignment_id')));
+      expect(columns, isNot(contains('player_number')));
+      expect(columns, isNot(contains('player_label')));
+      final indexes = check
+          .select("SELECT name FROM sqlite_master WHERE type = 'index' "
+              "AND tbl_name = 'controller_allocations'")
+          .map((r) => '${r['name']}')
+          .toSet();
+      expect(indexes, contains('ux_one_open_allocation_per_controller'));
+      expect(indexes, isNot(contains('ix_alloc_group')));
+      expect(check.userVersion, AppDatabase.expectedSchemaVersion);
+      check.close();
+    });
+
+    test('migrating twice is a no-op', () async {
+      final id = await buildV18Database();
+      var db = AppDatabase(NativeDatabase(file));
+      expect(await LocalSessionRepository(db).getById(id), isNotNull);
+      await db.close();
+      db = AppDatabase(NativeDatabase(file));
+      addTearDown(db.close);
+      expect(db.rebuiltFromVersion, 0);
+      expect(await LocalSessionRepository(db).getById(id), isNotNull);
+    });
+  });
 }

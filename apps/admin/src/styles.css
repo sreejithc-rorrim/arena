@@ -3,29 +3,3 @@
 /* Structural positioning for CDK overlays (the arena menu); no visual styles. */
 @import '@angular/cdk/overlay-prebuilt.css';
 
-/* ── Maps (shared/map/geo-map.ts; Leaflet's own CSS comes first in angular.json) ── */
-.leaflet-container {
-  font: inherit;
-  background: var(--arena-surface);
-}
-/* The geofence circle. */
-path.geo-fence {
-  stroke: var(--arena-primary);
-  fill: var(--arena-primary);
-}
-/* Clock-in pins are solid, clock-out pins hollow, so they differ without colour alone. */
-path.geo-in {
-  stroke: var(--arena-bg);
-  fill: var(--arena-success);
-}
-path.geo-out {
-  stroke: var(--arena-warning);
-  fill: var(--arena-warning);
-}
-/* The arena centre pin (a CSS pin: no marker image assets). */
-.geo-pin {
-  border: 3px solid var(--arena-bg);
-  border-radius: 9999px;
-  background: var(--arena-primary);
-  box-shadow: 0 0 0 2px var(--arena-primary);
-}

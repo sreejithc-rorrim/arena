@@ -1,16 +1,13 @@
 import 'package:arena_ops/app/notifications/device_time.dart';
 import 'package:arena_ops/core/clock/clock.dart';
 import 'package:arena_ops/core/notifications/notification_service.dart';
-import 'package:arena_ops/domain/entities/group_session.dart';
 import 'package:arena_ops/domain/entities/session.dart';
 import 'package:arena_ops/domain/notifications/notification_settings.dart';
 import 'package:arena_ops/domain/notifications/reminder_plan.dart';
 import 'package:arena_ops/domain/repositories/catalog_repository.dart';
 import 'package:arena_ops/domain/repositories/customer_repository.dart';
-import 'package:arena_ops/domain/repositories/group_session_repository.dart';
 import 'package:arena_ops/domain/repositories/notification_settings_repository.dart';
 import 'package:arena_ops/domain/repositories/session_repository.dart';
-import 'package:arena_ops/domain/value/enums.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 
@@ -21,7 +18,6 @@ class SessionReminders {
   SessionReminders({
     required this.service,
     required this.sessions,
-    required this.groups,
     required this.customers,
     required this.catalog,
     required this.settingsRepo,
@@ -30,13 +26,12 @@ class SessionReminders {
 
   final NotificationService service;
   final SessionRepository sessions;
-  final GroupSessionRepository groups;
   final CustomerRepository customers;
   final CatalogRepository catalog;
   final NotificationSettingsRepository settingsRepo;
   final Clock clock;
 
-  /// Session and group ids this run has alerts scheduled for, so [reconcile]
+  /// Session ids this run has alerts scheduled for, so [reconcile]
   /// can cancel those whose session ended, was voided or rolled back elsewhere.
   final Set<String> _scheduled = {};
 
@@ -82,12 +77,6 @@ class SessionReminders {
         await _scheduleSession(session.id, await sessions.active());
       });
 
-  /// Schedule (or reschedule) timer alerts for one group session.
-  Future<void> scheduleForGroup(GroupSession group) =>
-      _serial('scheduleForGroup(${group.id})', () async {
-        await _scheduleGroup(group.id, await groups.activeGroups());
-      });
-
   /// Cancel all 3 alert slots for a session (on session end or void).
   Future<void> cancelFor(String sessionId) =>
       _serial('cancelFor($sessionId)', () => _cancel(sessionId));
@@ -101,29 +90,23 @@ class SessionReminders {
   /// or vibration changes on alerts already set).
   Future<bool> reconcile() => _serial('reconcile', () async {
     final active = await sessions.active();
-    final activeGroups = await groups.activeGroups();
     final running = {
       for (final a in active)
         if (a.session.isActive) a.session.id,
-      for (final g in activeGroups)
-        if (g.group.isActive) g.group.id,
     };
     for (final id in _scheduled.difference(running).toList()) {
       await _cancel(id);
     }
-    await _scheduleAll(active, activeGroups);
+    await _scheduleAll(active);
   });
 
-  /// Schedule alerts for all currently active single & group sessions.
+  /// Schedule alerts for all currently active sessions.
   /// [reconcile] does this too; on its own it never cancels anything.
   Future<void> syncActive() => _serial('syncActive', () async {
-    await _scheduleAll(await sessions.active(), await groups.activeGroups());
+    await _scheduleAll(await sessions.active());
   });
 
-  Future<void> _scheduleAll(
-    List<ActiveSession> active,
-    List<ActiveGroupSession> activeGroups,
-  ) async {
+  Future<void> _scheduleAll(List<ActiveSession> active) async {
     // Latest end first: iOS keeps only the 64 most recently set
     // notifications, so the alerts due soonest are set last.
     final ends = <(DateTime, Future<void> Function())>[
@@ -132,12 +115,6 @@ class SessionReminders {
           (
             a.session.scheduledEndAt,
             () => _scheduleSession(a.session.id, active),
-          ),
-      for (final g in activeGroups)
-        if (g.group.isActive)
-          (
-            g.group.scheduledEndAt,
-            () => _scheduleGroup(g.group.id, activeGroups),
           ),
     ]..sort((x, y) => y.$1.compareTo(x.$1));
     for (final (_, schedule) in ends) {
@@ -173,34 +150,6 @@ class SessionReminders {
       await _schedule(session.id, plans, session.scheduledEndAt, settings);
     } catch (e) {
       debugPrint('SessionReminders.scheduleFor($id) failed: $e');
-    }
-  }
-
-  Future<void> _scheduleGroup(
-    String id,
-    List<ActiveGroupSession> activeGroups,
-  ) async {
-    final group = activeGroups.firstWhereOrNull((g) => g.group.id == id)?.group;
-    if (group == null || group.status != GroupSessionStatus.active) {
-      await _cancel(id);
-      return;
-    }
-    _scheduled.add(id); // before the reads, so the start-up sweep keeps it
-    try {
-      final settings = await settingsRepo.getSettings();
-      final customer = await customers.getById(group.primaryCustomerId);
-      final customerName = customer?.name ?? 'Group';
-
-      final plans = buildSessionAlerts(
-        sessionId: group.id,
-        titleName: 'Group (${group.playerCount}p) — $customerName',
-        scheduledEndAt: group.scheduledEndAt,
-        now: clock.now(),
-        settings: settings,
-      );
-      await _schedule(group.id, plans, group.scheduledEndAt, settings);
-    } catch (e) {
-      debugPrint('SessionReminders.scheduleForGroup($id) failed: $e');
     }
   }
 

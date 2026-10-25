@@ -45,9 +45,6 @@ begin
   ), b as (
     select s.customer_id as cid, s.started_at, s.billed_amount_paise as billed from sessions s
      where s.arena_id = p_arena and s.status <> 'voided' and (s.started_at >= p_since or s.status = 'active')
-    union all
-    select g.primary_customer_id, g.started_at, g.billed_amount_paise from group_sessions g
-     where g.arena_id = p_arena and g.status <> 'voided' and (g.started_at >= p_since or g.status = 'active')
   ), pl as (
     select customer_id, sum(minutes) as minutes from _plays(p_arena, p_since) group by customer_id
   ), s as (

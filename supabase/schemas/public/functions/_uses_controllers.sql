@@ -1,7 +1,7 @@
 -- _uses_controllers(p_arena, p_activity) — does the activity use controllers?
 --
 -- activities.uses_controllers, false when the arena has no such activity.
--- Used by _single_supply and _group_assignable.
+-- Used by _single_supply.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._uses_controllers (
   p_arena    uuid,

@@ -20,7 +20,10 @@ import 'package:arena_ops/domain/repositories/commands.dart';
 import 'package:arena_ops/domain/repositories/user_repository.dart';
 import 'package:arena_ops/domain/services/session_timer.dart';
 import 'package:arena_ops/domain/value/enums.dart';
-import 'package:arena_ops/features/reports/application/today_report.dart';
+import 'package:arena_ops/app/providers/core_providers.dart';
+import 'package:arena_ops/core/time/ist.dart';
+import 'package:arena_ops/domain/reports/report_models.dart';
+import 'package:arena_ops/features/reports/application/reports_providers.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -257,12 +260,12 @@ void main() {
     expect(await repo.openSegments(), isEmpty);
 
     // ---- the day's report --------------------------------------------------
-    final summary = await container.read(todaySummaryProvider.future);
+    final summary = await container.read(reportForRangeProvider(
+        ReportRange.today(IstDate.fromUtc(container.read(clockProvider).now()))).future);
     expect(summary.collectedPaise, bill.total.value,
         reason: 'takings are the payment rows, not a running tally');
     expect(summary.billedPaise, bill.total.value);
-    expect(summary.sessions, 1);
-    expect(summary.activeNow, 0, reason: 'nothing is still running');
+    expect(summary.sessionCount, 1);
     expect(summary.gamingMinutes, 90);
 
     // ---- and it is all still there on the next restart ---------------------

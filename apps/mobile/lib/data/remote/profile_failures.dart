@@ -4,7 +4,7 @@
 library;
 
 import 'package:arena_ops/core/result/result.dart';
-import 'package:arena_ops/data/remote/attendance_failures.dart';
+import 'package:arena_ops/data/remote/online_failures.dart';
 import 'package:arena_ops/domain/profile/staff_details.dart';
 
 abstract final class ProfileFailures {
@@ -53,7 +53,7 @@ abstract final class ProfileFailures {
     code: 'invalid_fields',
   );
 
-  /// The shared online plumbing words network states for attendance; these
+  /// The shared online plumbing words network states generically; these
   /// screens say it for themselves.
   static Failure reword(Failure f) => switch (f.code) {
         'offline' => offline,
@@ -97,7 +97,7 @@ abstract final class ProfileFailures {
             message: "Your staff profile isn't in this arena.",
             fix: 'Ask the owner to check your access.',
             code: 'not_found'),
-        'forbidden' => AttendanceFailures.accessOff,
+        'forbidden' => OnlineFailures.accessOff,
         _ => Failure(
             message: "Your details weren't saved"
                 '${code == null ? '' : ' ($code)'}.',
@@ -124,7 +124,7 @@ abstract final class ProfileFailures {
                 '${detail == null ? '' : ' ($detail)'}.',
             fix: 'Update the app and try again.',
             code: code),
-        'forbidden' => AttendanceFailures.accessOff,
+        'forbidden' => OnlineFailures.accessOff,
         _ => Failure(
             message: "Your acceptance didn't go through"
                 '${code == null ? '' : ' ($code)'}.',

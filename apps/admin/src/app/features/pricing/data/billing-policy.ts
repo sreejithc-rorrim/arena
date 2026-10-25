@@ -8,7 +8,6 @@ export type LateArrival = 'actual' | 'planned';
 export type VrUnitRounding = 'up' | 'nearest' | 'prorate';
 export type MoneyRoundingDir = 'nearest' | 'up';
 export type PaymentTiming = 'either' | 'start' | 'end';
-export type GroupBillingMode = 'per_system' | 'shared_controller_pool';
 
 /**
  * The arena's billing rules (server: billing_policies, the oldest active row), the knobs the
@@ -30,7 +29,6 @@ export interface BillingPolicy {
   readonly paymentTiming: PaymentTiming;
   readonly allowExtendPastClose: boolean;
   readonly cleaningGapMinutes: number;
-  readonly groupBillingMode: GroupBillingMode;
 }
 
 /** The server's defaults (_pr_policy), the floor app's BillingPolicy.defaults. */
@@ -48,12 +46,11 @@ export const DEFAULT_POLICY: BillingPolicy = {
   paymentTiming: 'either',
   allowExtendPastClose: false,
   cleaningGapMinutes: 0,
-  groupBillingMode: 'per_system',
 };
 
 /** The billing_policies columns the dashboard reads. */
 export const POLICY_COLUMNS =
-  'billing_unit, block_rounding, grace_minutes, minimum_charge_minutes, early_exit, rounding_scope, late_arrival, vr_unit_rounding, money_rounding_paise, money_rounding_dir, payment_timing, allow_extend_past_close, cleaning_gap_minutes, group_billing_mode';
+  'billing_unit, block_rounding, grace_minutes, minimum_charge_minutes, early_exit, rounding_scope, late_arrival, vr_unit_rounding, money_rounding_paise, money_rounding_dir, payment_timing, allow_extend_past_close, cleaning_gap_minutes';
 
 export interface Choice<T> {
   readonly value: T;
@@ -87,10 +84,6 @@ export const VR_ROUNDINGS: readonly Choice<VrUnitRounding>[] = [
   { value: 'up', label: 'Charge the whole block' },
   { value: 'nearest', label: 'Round to the nearest block' },
   { value: 'prorate', label: 'Charge the exact time used' },
-];
-export const GROUP_MODES: readonly Choice<GroupBillingMode>[] = [
-  { value: 'per_system', label: 'Each system billed for its own controllers' },
-  { value: 'shared_controller_pool', label: 'Pay once for the controllers bought' },
 ];
 
 /** Minutes offered for grace, minimum charge and the cleaning gap. */
@@ -148,13 +141,12 @@ export function parsePolicy(row: Record<string, unknown> | null | undefined): Bi
         : 'either',
     allowExtendPastClose: row['allow_extend_past_close'] === true,
     cleaningGapMinutes: int(row['cleaning_gap_minutes'], d.cleaningGapMinutes),
-    groupBillingMode: pick(row['group_billing_mode'], GROUP_MODES, d.groupBillingMode),
   };
 }
 
 /**
  * policy.save's `policy` object: every field, always. The server overwrites each column (a
- * missing one is refused), and reads group_billing_mode from inside this object.
+ * missing one is refused).
  */
 export function policyJson(p: BillingPolicy): Record<string, unknown> {
   return {
@@ -171,7 +163,6 @@ export function policyJson(p: BillingPolicy): Record<string, unknown> {
     payment_timing: p.paymentTiming,
     allow_extend_past_close: p.allowExtendPastClose,
     cleaning_gap_minutes: p.cleaningGapMinutes,
-    group_billing_mode: p.groupBillingMode,
   };
 }
 

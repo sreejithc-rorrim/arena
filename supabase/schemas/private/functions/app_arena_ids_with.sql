@@ -6,7 +6,7 @@
 -- of p_any. Policies call it as `arena_id in (select private.app_arena_ids_with(...))`
 -- so it runs once per query. Who needs what (direct reads by the dashboard and
 -- Realtime Postgres Changes; devices get their data through sync_pull):
---   payments, group_payments, session_charges, group_charges:
+--   payments, session_charges:
 --       bill (floor billing) or money / reports (owner level);
 --   customers: start or members (check-in, members) or money / reports;
 --   audit_log: money / reports (owner level) only.

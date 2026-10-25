@@ -16,9 +16,6 @@ const BUILT: Readonly<Record<string, () => Promise<Routes>>> = {
   members: () => import('./features/members/members.routes').then((m) => m.MEMBERS_ROUTES),
   settings: () => import('./features/settings/settings.routes').then((m) => m.SETTINGS_ROUTES),
   'staff/team': () => import('./features/team/team.routes').then((m) => m.TEAM_ROUTES),
-  'staff/attendance': () =>
-    import('./features/attendance/attendance.routes').then((m) => m.ATTENDANCE_ROUTES),
-  'staff/payroll': () => import('./features/payroll/payroll.routes').then((m) => m.PAYROLL_ROUTES),
 };
 
 const APP_ROUTES: Routes = [
@@ -78,14 +75,8 @@ const APP_ROUTES: Routes = [
       { path: 'games', pathMatch: 'full', redirectTo: 'settings/games' },
       // Accessories moved into Stations; keep old links working.
       { path: 'controllers', pathMatch: 'full', redirectTo: 'stations' },
-      // The Staff screens were folded into Team, Attendance and Payroll; keep old links working.
-      { path: 'staff/calendar', pathMatch: 'full', redirectTo: 'staff/attendance?view=calendar' },
-      { path: 'staff/leave', pathMatch: 'full', redirectTo: 'staff/attendance/leave' },
-      { path: 'staff/shifts', pathMatch: 'full', redirectTo: 'settings/staff/schedule' },
-      { path: 'staff/team/schedule', pathMatch: 'full', redirectTo: 'settings/staff/schedule' },
       // Users was split: employees and their access on Team, owners in Settings.
       { path: 'users', pathMatch: 'full', redirectTo: 'staff/team' },
-      { path: 'staff/pay-setup', pathMatch: 'full', redirectTo: 'staff/team' },
       // A nav entry without a BUILT screen shows a placeholder.
       ...NAV_ITEMS.map((item) =>
         BUILT[item.path]

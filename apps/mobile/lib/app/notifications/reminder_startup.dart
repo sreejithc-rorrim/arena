@@ -19,8 +19,8 @@ Future<void> startReminders(ProviderContainer container) async {
 }
 
 /// Rebuilds every scheduled alert from this device's database: the reminders
-/// of every upcoming booking and a timer alert set for every running session
-/// and group. A session started, extended, moved or ended — here, on another
+/// of every upcoming booking and a timer alert set for every running session.
+/// A session started, extended, moved or ended — here, on another
 /// device or while the app was closed — rings at its current end time, and an
 /// ended one no longer rings. Alerts are replaced in place (same ids), never
 /// cancelled first, so one falling due during the rebuild still rings.

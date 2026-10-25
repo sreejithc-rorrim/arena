@@ -4,8 +4,8 @@
 ///
 /// Flow (spec §15):
 ///   1. Validate the interval.
-///   2. Find the pricing rule judged at the rule instant (the session's or
-///      group's start; see `rule_engine.dart`).
+///   2. Find the pricing rule judged at the rule instant (the session's
+///      start; see `rule_engine.dart`).
 ///   3. Apply grace (free if under grace) and minimum-charge (extend interval).
 ///   4. Resolve the standard rate and adjust its unit price by the rule.
 ///   5. Apply the billing policy to get billed time/units.
@@ -40,8 +40,8 @@ class PricingService {
 
   /// Prices `[start, end]` of [activityCode] at [controllerCount].
   ///
-  /// [ruleAt] is the instant the pricing rule is judged at: the session's (or
-  /// group's) start, so every segment and extension of one session gets the
+  /// [ruleAt] is the instant the pricing rule is judged at: the session's
+  /// start, so every segment and extension of one session gets the
   /// same rule. Defaults to [start] (`_pr_quote`'s `coalesce(p_rule_at,
   /// p_start)`).
   Result<PricingQuote> quote({
@@ -101,12 +101,14 @@ class PricingService {
     );
     if (rate == null) {
       return Err(Failure(
-        message: 'No price is configured for this combination.',
+        message: controllerCount == null
+            ? 'No price for $activityCode.'
+            : 'No price for $activityCode with $controllerCount '
+                'controller${controllerCount == 1 ? '' : 's'}.',
         fix: controllerCount == null
-            ? 'Add a $activityCode rate in Settings → Pricing.'
-            : 'Add a $activityCode rate for $controllerCount '
-                'controller${controllerCount == 1 ? '' : 's'} '
-                'in Settings → Pricing.',
+            ? 'Add a $activityCode price on the dashboard (Pricing).'
+            : 'Pick another controller count, or add the price on the '
+                'dashboard (Pricing).',
         code: 'no_rate',
       ));
     }

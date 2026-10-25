@@ -1,7 +1,7 @@
 -- game_resources — per-station availability of each game
 --
 -- One row per (game, resource): whether that title can be played there right now.
--- A start, reconfigure or group placement that names a game is refused
+-- A start or reconfigure that names a game is refused
 -- (not_playable) unless the row exists with status 'playable' (_game_playable);
 -- no row is treated as not installed.
 -- Written by op_game_set_compat (game.set_compat); seeded by _seed_arena_catalog.

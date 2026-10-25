@@ -360,7 +360,6 @@ export const DEFAULT_DISCOUNT_OPTIONS: DiscountOptions = {
 /** One use of a discount on a bill (arena_discount_usage). */
 export interface DiscountUse {
   readonly billId: string;
-  readonly kind: 'single' | 'group';
   readonly at: string;
   readonly customer: string | null;
   readonly billedPaise: number | null;

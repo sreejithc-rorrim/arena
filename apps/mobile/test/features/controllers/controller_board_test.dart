@@ -25,14 +25,14 @@ void main() {
 
   final t = DateTime.utc(2026, 10, 1, 9);
 
-  // HEX-1: at home, in use by Player 1 on EA FC at HEX.
+  // HEX-1: at home, in use by a session on EA FC at HEX.
   final hex1 = PadView(
     controller: Controller(
         id: 'ctl_hex_1', label: 'HEX-1', homeResourceId: 'hex',
         currentResourceId: 'hex', updatedAt: t),
     state: PadState.inUse,
     allocation: ControllerAllocationRow(
-      id: 'a1', controllerId: 'ctl_hex_1', scope: 'single', playerNumber: 1,
+      id: 'a1', controllerId: 'ctl_hex_1', scope: 'single',
       resourceId: 'hex', activityCode: 'PS5', gameId: 'g_eafc',
       startedAt: t, createdAt: t,
     ),

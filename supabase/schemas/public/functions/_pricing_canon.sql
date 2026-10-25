@@ -5,7 +5,7 @@
 -- holidays and closed_days de-duplicated and sorted, rules (only when there are any) in priority
 -- order with their days and activity codes sorted. Card name and list order are dropped, and so are
 -- keys pricing no longer reads (an activity's happy_eligible, hours.happy from before happy hour
--- became a pricing rule).
+-- became a pricing rule, policy.group_billing_mode from before group sessions were removed).
 -- Used by _assert_snapshot and by _sync_apply (records a replaced list in pricing_catalog_history).
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._pricing_canon (
@@ -29,7 +29,8 @@ create or replace function public._pricing_canon (
         'grace', coalesce((a->>'overtime_grace_minutes')::int, 0))
         order by a->>'code', a->>'duration_model')
         from jsonb_array_elements(coalesce(s->'activities', '[]'::jsonb)) a), '[]'::jsonb),
-    'policy', _pr_policy(s),
+    -- group_billing_mode: dropped, so a device snapshot that still carries it matches.
+    'policy', _pr_policy(s) - 'group_billing_mode',
     'hours', (select jsonb_object_agg(kind, (select jsonb_object_agg(d::text,
         case when jsonb_typeof(s->'hours'->kind->(d::text)) = 'object'
              then jsonb_build_object('start', (s->'hours'->kind->(d::text)->>'start')::int,

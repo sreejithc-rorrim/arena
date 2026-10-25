@@ -27,11 +27,9 @@
               }
             ],
             "styles": [
-              "node_modules/leaflet/dist/leaflet.css",
               "src/styles.css",
               "src/material.scss"
             ],
-            "allowedCommonJsDependencies": ["leaflet"],
             "serviceWorker": "ngsw-config.json"
           },
           "configurations": {

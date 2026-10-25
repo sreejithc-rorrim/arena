@@ -62,10 +62,10 @@ begin
     perform _need(p_arena, 'settings');
     perform _assert_known_perms(p_perms);
     v_perms := coalesce(p_perms, '{}');
-    if v_perms && array['money', 'reports', 'payroll', 'payroll_finalise', 'bill_edit', 'bill_record']
+    if v_perms && array['money', 'reports', 'bill_edit', 'bill_record']
        and not private.app_is_owner(p_arena) then
       raise exception 'forbidden' using errcode = '42501',
-        hint = 'only an owner can grant money, reports, payroll, or editing or adding bills';
+        hint = 'only an owner can grant money, reports, or editing or adding bills';
     end if;
   end if;
   if exists (select 1 from auth.users where id = auth.uid() and lower(email) = v_email) then

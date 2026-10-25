@@ -19,7 +19,6 @@ final controllerBoardProvider =
     FutureProvider.autoDispose<ControllerDashboard>((ref) async {
   ref.watch(controllersProvider);
   ref.watch(activeSessionsProvider);
-  ref.watch(activeGroupsProvider);
   return ref.watch(controllerAllocationRepositoryProvider).dashboard();
 });
 
@@ -153,8 +152,7 @@ class ControllerBoardScreen extends ConsumerWidget {
     }
     final a = p.allocation;
     if (a != null) {
-      final who = a.playerLabel ??
-          (a.playerNumber != null ? 'Player ${a.playerNumber}' : 'Session');
+      const who = 'Session';
       final game = a.gameId == null ? '' : ' · ${gameName[a.gameId] ?? 'game'}';
       final where = resourceName[a.resourceId] ?? a.resourceId;
       parts.add('$who on $where$game');

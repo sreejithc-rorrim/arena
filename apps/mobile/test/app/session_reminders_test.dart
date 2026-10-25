@@ -137,7 +137,6 @@ void main() {
   /// are that device's business — nothing is scheduled or cancelled here.
   SessionActions otherDevice(ProviderContainer c) => SessionActions(
     sessions: c.read(sessionRepositoryProvider),
-    groups: c.read(groupSessionRepositoryProvider),
     catalog: c.read(catalogRepositoryProvider),
     bookings: c.read(bookingRepositoryProvider),
     clock: c.read(clockProvider),

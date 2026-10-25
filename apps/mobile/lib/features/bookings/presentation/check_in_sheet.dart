@@ -12,7 +12,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Check a booked party in (spec §22–§23) with the same controller control as
 /// New Session: the system is resolved now (the booked one, or the best free
-/// compatible one), the booking's controller count is pre-picked from the pads
+/// compatible one, with the other free ones as chips staff can pick instead),
+/// the booking's controller count is pre-picked from the pads
 /// standing there, and anything short can be borrowed explicitly. Nothing is
 /// started until "Check in" — which re-validates everything.
 ///
@@ -38,6 +39,10 @@ class _CheckInSheetState extends ConsumerState<_CheckInSheet> {
   late final Future<Result<CheckInPlan>> _plan =
       ref.read(bookingActionsProvider).planCheckIn(widget.booking);
   ControllerChoice? _choice;
+
+  /// The station staff picked from the plan's choices (any-system bookings);
+  /// null = the planned one.
+  Resource? _station;
   bool _busy = false;
 
   @override
@@ -71,6 +76,7 @@ class _CheckInSheetState extends ConsumerState<_CheckInSheet> {
             );
           }
           final plan = planned.valueOrNull!;
+          final station = _station ?? plan.resource;
           final choice = _choice ??
               (plan.requestedControllers == null
                   ? ControllerChoice.none
@@ -91,7 +97,7 @@ class _CheckInSheetState extends ConsumerState<_CheckInSheet> {
                   style: theme.textTheme.titleLarge),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                '${plan.resource.name}'
+                '${station.name}'
                 '${plan.alternatives ? ' · free compatible system' : ''}'
                 '${plan.requestedControllers == null ? '' : ' · booked for '
                     '${plan.requestedControllers} controller'
@@ -99,12 +105,37 @@ class _CheckInSheetState extends ConsumerState<_CheckInSheet> {
                 key: const ValueKey('check-in-station'),
                 style: ArenaType.caption.copyWith(color: arena.textMuted),
               ),
+              if (plan.choices.length > 1) ...[
+                const SizedBox(height: AppSpacing.md),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  children: [
+                    for (final r in plan.choices)
+                      ChoiceChip(
+                        key: ValueKey('check-in-station-${r.id}'),
+                        label: Text(r.name),
+                        selected: station.id == r.id,
+                        // Same count at the new station; the field picks
+                        // that many free pads there.
+                        onSelected: (_) {
+                          if (r.id == station.id) return; // keep the picks
+                          setState(() {
+                            _station = r;
+                            _choice = ControllerChoice.tracked(
+                                requested: choice.requested);
+                          });
+                        },
+                      ),
+                  ],
+                ),
+              ],
               if (plan.usesControllers) ...[
                 const SizedBox(height: AppSpacing.md),
                 ControllerChoiceField(
-                  alternatives: _alternatives(plan),
-                  resourceId: plan.resource.id,
-                  resourceName: plan.resource.name,
+                  key: ValueKey('check-in-pads-${station.id}'),
+                  alternatives: plan.choices,
+                  resourceId: station.id,
+                  resourceName: station.name,
                   choice: choice,
                   maxCount: max,
                   maxReason: max == null || max >= 4
@@ -117,7 +148,9 @@ class _CheckInSheetState extends ConsumerState<_CheckInSheet> {
               const SizedBox(height: AppSpacing.lg),
               FilledButton.icon(
                 key: const ValueKey('check-in-confirm'),
-                onPressed: !ready || _busy ? null : () => _confirm(plan, choice),
+                onPressed: !ready || _busy
+                    ? null
+                    : () => _confirm(plan, station, choice),
                 icon: const Icon(Icons.play_arrow),
                 label: Text(_busy ? 'Starting…' : 'Check in & start'),
               ),
@@ -126,35 +159,6 @@ class _CheckInSheetState extends ConsumerState<_CheckInSheet> {
         },
       ),
     );
-  }
-
-  /// Other free stations that could take this party now (any-system
-  /// bookings only — a booking for a named station stays there).
-  List<Resource> _alternatives(CheckInPlan plan) {
-    if (!plan.alternatives) return const [];
-    final busy = <String>{
-      for (final s in ref.watch(openSegmentsProvider).value ?? const [])
-        s.resourceId,
-      for (final a in ref.watch(openGroupAssignmentsProvider).value ?? const [])
-        a.resourceId,
-    };
-    final gameId = widget.booking.gameId;
-    final playable = <String>{
-      if (gameId != null)
-        for (final rf
-            in ref.watch(resourcesForGameProvider(gameId)).value ?? const [])
-          if (rf.status.isPlayable) rf.resource.id,
-    };
-    final activity = widget.booking.activityCode;
-    return [
-      for (final r in ref.watch(resourcesProvider).value ?? const <Resource>[])
-        if (r.activityCodes.contains(activity) &&
-            r.status == ResourceStatus.available &&
-            (r.currentMode == null || r.currentMode == activity) &&
-            !busy.contains(r.id) &&
-            (gameId == null || playable.contains(r.id)))
-          r,
-    ];
   }
 
   /// The name the upcoming-bookings tile shows: the party name, else the
@@ -168,12 +172,16 @@ class _CheckInSheetState extends ConsumerState<_CheckInSheet> {
         'Guest';
   }
 
-  Future<void> _confirm(CheckInPlan plan, ControllerChoice choice) async {
+  Future<void> _confirm(
+    CheckInPlan plan,
+    Resource station,
+    ControllerChoice choice,
+  ) async {
     setState(() => _busy = true);
     final r = await ref.read(bookingActionsProvider).checkIn(
           widget.booking,
           controllers: plan.usesControllers ? choice : null,
-          resourceId: plan.resource.id,
+          resourceId: station.id,
         );
     if (!mounted) return;
     setState(() => _busy = false);

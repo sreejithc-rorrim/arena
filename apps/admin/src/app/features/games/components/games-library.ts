@@ -37,8 +37,7 @@ const GAMES = '/settings/games';
 /**
  * Settings › Games: the catalog staff pick from, as a table (platform, play modes, players per
  * station, age, 30-day play, status), searchable and filtered by platform (`?platform=PS5`). Shown in the Settings detail pane beside the Settings
- * list; a game opens in its place at `/settings/games/<game>`, as a shift does on Staff ›
- * Schedule.
+ * list; a game opens in its place at `/settings/games/<game>`.
  */
 @Component({
   selector: 'app-games-library',

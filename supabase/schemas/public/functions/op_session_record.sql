@@ -12,8 +12,8 @@
 --   charge rows are built from the server's own quote.
 -- Checks / errors: forbidden; reason_required; reason_too_long; invalid_payload; invalid_method;
 --   time_in_future; invalid_time (end not after start, or over 24 h); not_found (customer /
---   station / game); activity_not_offered; no_rate; overlap (the station has a session or group
---   play recorded in that time); price_mismatch (the total differs from the server's).
+--   station / game); activity_not_offered; no_rate; overlap (the station has a session
+--   recorded in that time); price_mismatch (the total differs from the server's).
 -- Writes, in one transaction: sessions (completed; scheduled end = actual end; ended_recorded_at
 --   = now), one closed session_segments row, session_charges, one payments row for the total
 --   (note 'Added later', the reason) when it is above 0, payment_status 'paid', and an audit_log
@@ -75,9 +75,6 @@ begin
     raise exception 'not_found' using hint = 'game';
   end if;
   if exists (select 1 from session_segments
-              where resource_id = v_res and arena_id = p_arena
-                and tstzrange(started_at, coalesce(ended_at, 'infinity')) && tstzrange(v_start, v_end))
-     or exists (select 1 from group_assignments
               where resource_id = v_res and arena_id = p_arena
                 and tstzrange(started_at, coalesce(ended_at, 'infinity')) && tstzrange(v_start, v_end)) then
     raise exception 'overlap' using hint = 'the station already has play recorded in that time';

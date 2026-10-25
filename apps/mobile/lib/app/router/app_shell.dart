@@ -7,8 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 /// Hosts the bottom nav and the active branch's navigator. The destinations are
-/// filtered to what the signed-in user can access (staff don't see Money /
-/// Reports / Today).
+/// filtered to what the signed-in user can access (Bills needs a bill
+/// permission and a connection).
 class AppShell extends ConsumerWidget {
   const AppShell({super.key, required this.navigationShell});
 

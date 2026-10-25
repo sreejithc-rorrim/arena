@@ -4,7 +4,7 @@
 -- code never sits in an API schema. Clients reach it only through the
 -- SECURITY INVOKER wrapper public.arena_sales.
 --
--- The arena's closed bills (single sessions and groups, completed or voided)
+-- The arena's closed bills (single sessions, completed or voided)
 -- that closed in [p_from, p_to), newest first, as a jsonb array of _sales
 -- summaries. The range may span at most 93 days, else 'invalid_range'.
 -- SECURITY DEFINER. Caller must be owner level in p_arena (app_is_owner), else
@@ -34,7 +34,7 @@ begin
 end;
 $function$;
 
-comment on function private.arena_sales(uuid, timestamptz, timestamptz) is 'Client API (owner level): the arena''s closed bills (sessions and groups, completed or voided) that closed in [from, to), newest first, for the admin dashboard''s Sales screen. At most 93 days.';
+comment on function private.arena_sales(uuid, timestamptz, timestamptz) is 'Client API (owner level): the arena''s closed bills (sessions, completed or voided) that closed in [from, to), newest first, for the admin dashboard''s Sales screen. At most 93 days.';
 
 grant execute on function "private"."arena_sales"(uuid, timestamptz, timestamptz) to "authenticated", "postgres", "service_role";
 

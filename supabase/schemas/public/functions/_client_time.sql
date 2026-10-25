@@ -1,14 +1,13 @@
 -- _client_time(arena, at, field) — refuse a device-stamped billing instant the server cannot trust
 --
--- Session and group times come from the floor device (it works offline). The server bounds them
+-- Session times come from the floor device (it works offline). The server bounds them
 -- against its own clock: later than now + 2 minutes (clock drift) is time_in_future; older than
 -- the arena's offline window is time_too_old (settings key offline_rules, max_offline_hours;
 -- default 24 hours: an op that waited longer offline goes to Sync › Needs attention).
 -- Lateness inside the window is not refused: the receipt time is stored (sessions.created_at,
 -- ended_recorded_at) and the dashboard flags a late record. A null passes (the caller's own
 -- checks handle a missing time).
--- Used by op_session_start / _reconfigure / _end and op_group_create / _add / _switch /
--- _end_player / _end.
+-- Used by op_session_start / _reconfigure / _end.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._client_time (
   p_arena uuid,

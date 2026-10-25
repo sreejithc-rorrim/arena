@@ -2,8 +2,8 @@
 --
 -- Returns the BillingPolicy.defaults JSON overlaid (jsonb ||) with s->'policy', so a key absent
 -- from an older snapshot reads as the device reads it. Used by _pr_quote, _pr_session_bill,
--- _pr_group_bill, _pricing_canon, _pricing_snapshot (fallback when no active policy row) and
--- op_group_create (billing_mode check). Mirrors BillingPolicy.defaults (domain/pricing/billing_policy.dart).
+-- _pricing_canon and _pricing_snapshot (fallback when no active policy row). Mirrors
+-- BillingPolicy.defaults (domain/pricing/billing_policy.dart).
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._pr_policy (
   s jsonb
@@ -17,7 +17,7 @@ create or replace function public._pr_policy (
     "minimum_charge_minutes":0,"early_exit":"actual","rounding_scope":"session",
     "late_arrival":"actual","vr_unit_rounding":"up","money_rounding_paise":100,
     "money_rounding_dir":"nearest","payment_timing":"either","allow_extend_past_close":false,
-    "cleaning_gap_minutes":0,"group_billing_mode":"per_system"}'::jsonb
+    "cleaning_gap_minutes":0}'::jsonb
     || coalesce(s->'policy', '{}'::jsonb);
 $function$;
 

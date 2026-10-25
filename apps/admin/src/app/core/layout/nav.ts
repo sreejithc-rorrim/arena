@@ -48,19 +48,11 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     ],
   },
   {
-    // Three screens: employees (and everything about each) on Team, leave requests under
-    // Attendance; the venue's shifts, holidays and rules in Settings › Staff.
+    // Staff and their access on Team; the staff terms in Settings › Staff.
     heading: 'Staff',
     items: [
       // Everyone who can open the dashboard sees the team; each tab checks its permission.
       { path: 'staff/team', label: 'Team', icon: 'badge' },
-      {
-        path: 'staff/attendance',
-        label: 'Attendance',
-        icon: 'how_to_reg',
-        perm: 'attendance_review',
-      },
-      { path: 'staff/payroll', label: 'Payroll', icon: 'payments', perm: 'payroll' },
     ],
   },
   { heading: 'Arena', items: [{ path: 'settings', label: 'Settings', icon: 'settings' }] },

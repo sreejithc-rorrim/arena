@@ -92,7 +92,7 @@ export function activityLines(
     return {
       billId: b.billId,
       title: title(b),
-      subtitle: [billRef(b.kind, b.billId), when, gameInSubtitle ? b.game : null]
+      subtitle: [billRef(b.billId), when, gameInSubtitle ? b.game : null]
         .filter(Boolean)
         .join(' · '),
       value,

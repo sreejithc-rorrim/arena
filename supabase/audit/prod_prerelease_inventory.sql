@@ -52,13 +52,9 @@ select a.id, a.name, a.area, a.created_at,
        (select count(*) from public.games g where g.arena_id = a.id)             as games,
        (select count(*) from public.customers c where c.arena_id = a.id)         as customers,
        (select count(*) from public.sessions s where s.arena_id = a.id)          as sessions,
-       (select count(*) from public.group_sessions g where g.arena_id = a.id)    as group_sessions,
-       (select count(*) from public.payments p where p.arena_id = a.id)
-         + (select count(*) from public.group_payments p where p.arena_id = a.id) as payment_rows,
+       (select count(*) from public.payments p where p.arena_id = a.id)          as payment_rows,
        (select round(coalesce(sum(p.amount_paise), 0) / 100.0, 2)
           from public.payments p where p.arena_id = a.id)                        as session_payments_rupees_raw,
-       (select round(coalesce(sum(p.amount_paise), 0) / 100.0, 2)
-          from public.group_payments p where p.arena_id = a.id)                  as group_payments_rupees_raw,
        (select count(*) from public.attendance_punches p where p.arena_id = a.id) as punches,
        (select count(*) from public.salary_runs s where s.arena_id = a.id)       as salary_runs,
        (select min(o.created_at) from public.sync_ops o where o.arena_id = a.id) as first_op_at,

@@ -18,7 +18,6 @@ import 'package:arena_ops/domain/pricing/pricing_service.dart';
 import 'package:arena_ops/domain/reports/report_models.dart';
 import 'package:arena_ops/domain/reports/reports_service.dart';
 import 'package:arena_ops/domain/pricing/rate.dart';
-import 'package:arena_ops/domain/services/group_billing.dart';
 import 'package:arena_ops/domain/services/segment_billing.dart';
 import 'package:arena_ops/core/money/paise.dart';
 import 'package:arena_ops/domain/repositories/commands.dart';
@@ -29,7 +28,6 @@ import 'package:arena_ops/domain/auth/app_user.dart';
 import 'package:arena_ops/domain/auth/permission.dart';
 import 'package:arena_ops/domain/entities/booking.dart';
 import 'package:arena_ops/domain/entities/session.dart';
-import 'package:arena_ops/domain/repositories/group_commands.dart';
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide Session;
@@ -97,16 +95,6 @@ void main() {
         snapshot: s.snapshot, segments: await d.sessions.segmentsFor(id), openEndAt: at,
         sessionStart: s.startedAt);
     return EndSessionCommand(sessionId: id, actualEndedAt: at,
-        charges: bill.charges, billedAmountPaise: bill.total.value);
-  }
-
-  Future<EndGroupCommand> pricedGroupEnd(SimDevice d, String id, DateTime at) async {
-    final g = (await d.groups.getById(id))!;
-    final bill = const GroupBilling().bill(
-        snapshot: g.snapshot, assignments: await d.groups.assignmentsFor(id),
-        mode: g.billingMode, purchasedControllerCount: g.purchasedControllerCount,
-        groupStart: g.startedAt, openEndAt: at);
-    return EndGroupCommand(groupId: id, actualEndedAt: at,
         charges: bill.charges, billedAmountPaise: bill.total.value);
   }
 
@@ -433,53 +421,6 @@ void main() {
     expect(history, isNotEmpty, reason: 'allocation history is kept');
   }, skip: skip);
 
-  test('a group with tracked pads syncs, and ending it on the other device '
-      'releases them', () async {
-    await a.sync();
-    await b.sync();
-
-    final now = DateTime.now().toUtc();
-    final eafc = await b.game('EA SPORTS FC 25');
-    final hex = await b.station('HEX');
-    final created = await b.groups.create(CreateGroupCommand(
-      primaryCustomerId: (await b.customers.createGuest()).id,
-      playerCount: 2,
-      purchasedControllerCount: 2,
-      startedAt: now,
-      scheduledEndAt: now.add(const Duration(hours: 1)),
-      snapshot: await b.catalog.currentSnapshot(),
-      billingMode: GroupBillingMode.perSystem,
-      assignments: [
-        for (final (n, label) in [(1, 'HEX-1'), (2, 'HEX-2')])
-          GroupAssignmentDraft(
-            playerNumber: n,
-            resourceId: hex,
-            resourceName: 'HEX',
-            activityCode: 'PS5',
-            gameId: eafc,
-            controllerCount: 1,
-            controllerIds: [await b.pad(label)],
-          ),
-      ],
-    ));
-    expect(created.isOk, isTrue, reason: '${created.failureOrNull?.message}');
-    expect((await b.sync()).rejected, 0);
-    final groupId = created.valueOrNull!.id;
-    expect(await serverCount('controller_allocations', 'group_id', groupId,
-        openOnly: true), 2);
-
-    await a.sync();
-    final group = await a.groups.getById(groupId);
-    expect(group?.isActive, isTrue);
-    final ended = await a.groups.end(await pricedGroupEnd(a, groupId,
-        group!.startedAt.add(const Duration(minutes: 47, seconds: 13, milliseconds: 517))));
-    expect(ended.isOk, isTrue);
-    expect((await a.sync()).rejected, 0);
-    await b.sync();
-    expect((await b.groups.getById(groupId))?.status, GroupSessionStatus.completed);
-    expect(await b.openPadLabels(), isNot(contains('HEX-1')));
-  }, skip: skip);
-
   test('two devices checking in the same booking offline: one session, one '
       'check-in', () async {
     final start = DateTime.now().toUtc().add(const Duration(minutes: 5));
@@ -638,10 +579,6 @@ void main() {
         segments: await d.sessions.segmentsInRange(from, to),
         charges: await d.sessions.chargesInRange(from, to),
         payments: await d.sessions.paymentsInRange(from, to),
-        groups: await d.groups.inRange(from, to),
-        groupAssignments: await d.groups.assignmentsInRange(from, to),
-        groupCharges: await d.groups.chargesInRange(from, to),
-        groupPayments: await d.groups.paymentsInRange(from, to),
         customers: await d.customers.all(),
         resources: await d.catalog.resources(),
         gameNames: const {},

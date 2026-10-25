@@ -1,22 +1,17 @@
--- _pad_allocate(p_arena, p_allocs, p_scope, ...) — record pads as in use by a segment or group assignment.
+-- _pad_allocate(p_arena, p_allocs, p_session, p_segment, ...) — record pads as in use by a session segment.
 --
 -- p_allocs is [{controller_id, id?}]. Raises controller_duplicate, controller_missing,
 -- not_a_controller (an accessory whose kind is not a pad, see _is_pad),
 -- controller_unusable (hint: status), controller_elsewhere (not at p_resource) or controller_taken
--- (already allocated, or untracked play at the station other than p_segment / p_assignment).
+-- (already allocated, or untracked play at the station other than p_segment).
 -- All checks run before any controller_allocations row is inserted. Pads are locked by the caller.
--- Used by op_session_start, op_session_reconfigure and _group_place.
+-- Used by op_session_start and op_session_reconfigure.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._pad_allocate (
   p_arena      uuid,
   p_allocs     jsonb,
-  p_scope      text,
   p_session    uuid,
-  p_group      uuid,
   p_segment    uuid,
-  p_assignment uuid,
-  p_player     integer,
-  p_label      text,
   p_resource   uuid,
   p_activity   text,
   p_game       uuid,
@@ -47,35 +42,32 @@ begin
     if exists (select 1 from controller_allocations where controller_id = v_cid and ended_at is null) then
       raise exception 'controller_taken';
     end if;
-    if _untracked_busy(p_arena, p_resource, array_remove(array[p_segment, p_assignment], null)) then
+    if _untracked_busy(p_arena, p_resource, array_remove(array[p_segment], null)) then
       raise exception 'controller_taken' using hint = 'untracked_player';
     end if;
   end loop;
   for v_a in select value from jsonb_array_elements(p_allocs) loop
-    insert into controller_allocations(id, arena_id, controller_id, scope, session_id, group_id,
-        segment_id, assignment_id, player_number, player_label, resource_id, activity_code,
-        game_id, started_at, created_by, created_at)
+    insert into controller_allocations(id, arena_id, controller_id, scope, session_id,
+        segment_id, resource_id, activity_code, game_id, started_at, created_by, created_at)
       values (coalesce(nullif(v_a->>'id','')::uuid, gen_random_uuid()), p_arena,
-        (v_a->>'controller_id')::uuid, p_scope, p_session, p_group, p_segment, p_assignment,
-        p_player, p_label, p_resource, p_activity, p_game, p_started, auth.uid(), v_now);
+        (v_a->>'controller_id')::uuid, 'single', p_session, p_segment, p_resource, p_activity,
+        p_game, p_started, auth.uid(), v_now);
   end loop;
 end;
 $function$;
 
-comment on function public._pad_allocate(uuid, jsonb, text, uuid, uuid, uuid, uuid, integer, text, uuid, text, uuid, timestamp with time zone) is 'Validates and inserts controller allocations for a session segment or group assignment.';
+comment on function public._pad_allocate(uuid, jsonb, uuid, uuid, uuid, text, uuid, timestamp with time zone) is 'Validates and inserts controller allocations for a session segment.';
 
 grant execute
   on function
-    "public"."_pad_allocate"(uuid, jsonb, text, uuid, uuid, uuid, uuid, integer, text, uuid, text,
-    uuid, timestamp with time zone)
+    "public"."_pad_allocate"(uuid, jsonb, uuid, uuid, uuid, text, uuid, timestamp with time zone)
   to "postgres", "service_role";
 
 revoke all
   on function
-    "public"."_pad_allocate"(uuid, jsonb, text, uuid, uuid, uuid, uuid, integer, text, uuid, text,
-    uuid, timestamp with time zone)
+    "public"."_pad_allocate"(uuid, jsonb, uuid, uuid, uuid, text, uuid, timestamp with time zone)
   from public;
 
-revoke all on function "public"._pad_allocate(p_arena uuid, p_allocs jsonb, p_scope text, p_session uuid, p_group uuid, p_segment uuid, p_assignment uuid, p_player integer, p_label text, p_resource uuid, p_activity text, p_game uuid, p_started timestamp with time zone) from anon;
+revoke all on function "public"._pad_allocate(p_arena uuid, p_allocs jsonb, p_session uuid, p_segment uuid, p_resource uuid, p_activity text, p_game uuid, p_started timestamp with time zone) from anon;
 
-revoke all on function "public"._pad_allocate(p_arena uuid, p_allocs jsonb, p_scope text, p_session uuid, p_group uuid, p_segment uuid, p_assignment uuid, p_player integer, p_label text, p_resource uuid, p_activity text, p_game uuid, p_started timestamp with time zone) from authenticated;
+revoke all on function "public"._pad_allocate(p_arena uuid, p_allocs jsonb, p_session uuid, p_segment uuid, p_resource uuid, p_activity text, p_game uuid, p_started timestamp with time zone) from authenticated;

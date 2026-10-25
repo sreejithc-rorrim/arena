@@ -210,59 +210,6 @@ select is((select payment_status || ' ' || billed_amount_paise from sessions
             where id = 'a8000000-0000-0000-0000-000000000004'), 'waived 15000',
   'waived, with the true amount on record');
 
--- ------------------------------------------- 5. groups
-create function pg_temp.grp(p_id text, p_mode text, p_snap jsonb default null) returns jsonb as $$
-  select jsonb_build_object('id', p_id::uuid,
-    'primary_customer_id','cccccccc-0000-0000-0000-000000000008','player_count',2,
-    'purchased_controller_count',2,'started_at','2026-10-01T11:00:00Z',
-    'scheduled_end_at','2026-10-01T12:00:00Z','pricing_snapshot', coalesce(p_snap, pg_temp.snap()),
-    'billing_mode', p_mode,
-    'assignments', jsonb_build_array(
-      jsonb_build_object('id','98800000-0000-0000-0000-000000000001','player_number',1,'idx',0,
-        'resource_id', pg_temp.r('GHOST'),'activity_code','PS5','controller_count',1,
-        'allocations','[]'::jsonb,'moves','[]'::jsonb),
-      jsonb_build_object('id','98800000-0000-0000-0000-000000000002','player_number',2,'idx',0,
-        'resource_id', pg_temp.r('GHOST'),'activity_code','PS5','controller_count',1,
-        'allocations','[]'::jsonb,'moves','[]'::jsonb))) $$ language sql;
-select is(pg_temp.push('group.create', pg_temp.grp('98880000-0000-0000-0000-000000000001',
-    'shared_controller_pool'))->>'error', 'pricing_snapshot_mismatch',
-  'a group billing mode other than the price list''s is refused');
-select is(pg_temp.push('group.create', pg_temp.grp('98880000-0000-0000-0000-000000000001', 'per_system',
-    jsonb_set(pg_temp.snap(), '{policy,money_rounding_paise}', '100000')))->>'error',
-  'pricing_snapshot_mismatch', 'a group frozen on an altered policy is refused');
-select is(pg_temp.push('group.create', pg_temp.grp('98880000-0000-0000-0000-000000000001', 'per_system'))
-    ->>'status', 'applied', 'two players share GHOST (one system, 2 pads)');
-select is(pg_temp.push('group.extend', jsonb_build_object('group_id','98880000-0000-0000-0000-000000000001',
-    'extension_id', gen_random_uuid(), 'added_minutes', 30, 'old_end_at','2026-10-01T12:00:00Z',
-    'new_end_at','2026-10-01T12:30:00Z', 'added_amount_paise', 6000))->>'error', 'price_mismatch',
-  'a group extension quoted at the 1-pad rate is refused');
-select is(pg_temp.push('group.extend', jsonb_build_object('group_id','98880000-0000-0000-0000-000000000001',
-    'extension_id', gen_random_uuid(), 'added_minutes', 30, 'old_end_at','2026-10-01T12:00:00Z',
-    'new_end_at','2026-10-01T12:30:00Z', 'added_amount_paise', 11200))->>'status', 'applied',
-  'the 2-pad happy hours rate for +30 min (₹112) is accepted (the rule follows the group start)');
--- 16:30–17:30 IST at the 2-pad rate, started in happy hours: ₹224 for the whole hour.
-create function pg_temp.gch(p_price int, p_amount int) returns jsonb as $$
-  select jsonb_build_object('id', gen_random_uuid(), 'charge_index', 0, 'band_code', 'standard',
-    'activity_code','PS5','resource_id', pg_temp.r('GHOST'),'controller_count',2,
-    'segment_start', '2026-10-01T11:00:00Z', 'segment_end', '2026-10-01T12:00:00Z',
-    'played_minutes',60,'billed_minutes',60,
-    'unit_minutes',60,'unit_price_paise', p_price,'amount_paise', p_amount) $$ language sql;
-create function pg_temp.gend(p_billed bigint, p_charges jsonb) returns jsonb as $$
-  select jsonb_build_object('group_id','98880000-0000-0000-0000-000000000001',
-    'ended_at','2026-10-01T12:00:00Z','billed_amount_paise', p_billed,
-    'expected_assignment_ids', '["98800000-0000-0000-0000-000000000001","98800000-0000-0000-0000-000000000002"]'::jsonb,
-    'expected_scheduled_end_at','2026-10-01T12:30:00Z','charges', p_charges) $$ language sql;
-select is(pg_temp.push('group.end', pg_temp.gend(12000, jsonb_build_array(
-    pg_temp.gch(12000,12000))))->>'error',
-  'price_mismatch', 'billing the shared system at the 1-pad rate (under-billing) is refused');
-select is((select status from group_sessions where id = '98880000-0000-0000-0000-000000000001'), 'active',
-  'the group is still running');
-select is(pg_temp.push('group.end', pg_temp.gend(22400, jsonb_build_array(
-    pg_temp.gch(22400,22400))))->>'status',
-  'applied', 'the whole hour at the 2-pad happy hours rate is accepted');
-select is((select billed_amount_paise from group_sessions where id = '98880000-0000-0000-0000-000000000001'),
-  22400::bigint, 'group billed ₹224');
-
 -- ------------------------------------------- 6. a device offline across a price change
 create temp table old_list as select pg_temp.snap() as s;
 select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
@@ -299,10 +246,10 @@ select is(pg_temp.push('session.end', pg_temp.end_op('a8000000-0000-0000-0000-00
 select ok(not has_function_privilege('authenticated', f, 'execute'), f || ' is not client-callable')
   from unnest(array['_pr_quote(jsonb,text,int,timestamptz,timestamptz,timestamptz)',
     '_pr_rule(jsonb,text,timestamptz)','_pr_rule_price(bigint,int,jsonb)',
-    '_pr_session_bill(uuid,timestamptz,boolean)','_pr_group_bill(uuid,timestamptz,timestamptz)',
-    '_pricing_snapshot(uuid)','_assert_snapshot(uuid,jsonb)','op_session_end(uuid,jsonb)','op_group_end(uuid,jsonb)',
-    'op_session_start(uuid,jsonb)','op_group_create(uuid,jsonb)','op_session_extend(uuid,jsonb)',
-    'op_group_extend(uuid,jsonb)','_sync_apply(uuid,text,jsonb)']) f;
+    '_pr_session_bill(uuid,timestamptz,boolean)',
+    '_pricing_snapshot(uuid)','_assert_snapshot(uuid,jsonb)','op_session_end(uuid,jsonb)',
+    'op_session_start(uuid,jsonb)','op_session_extend(uuid,jsonb)',
+    '_sync_apply(uuid,text,jsonb)']) f;
 select ok(not has_table_privilege('authenticated', 'pricing_catalog_history', 'select'),
   'price-list history is server-only');
 

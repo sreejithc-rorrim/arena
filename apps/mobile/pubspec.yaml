@@ -51,8 +51,6 @@ dependencies:
   # Opens the iPhone's Settings page for this app ("app-settings:") when
   # notifications were blocked. Already present transitively via supabase.
   url_launcher: ^6.3.3
-  excel: ^4.0.6
-  share_plus: ^13.3.1
   path_provider: ^2.1.6
   # Used by the pre-open backup/verification path in data/local/db_safety.dart
   # to read and integrity-check a database copy without Drift (and therefore
@@ -62,9 +60,6 @@ dependencies:
   crypto: ^3.0.7
   supabase_flutter: ^2.18.2
   flutter_secure_storage: ^11.2.0
-  geolocator: ^14.1.1
-  flutter_map: ^8.3.2
-  latlong2: ^0.10.1
 
 dev_dependencies:
   flutter_test:

@@ -6,10 +6,10 @@
 -- Applies grace (free when <= grace_minutes), minimum charge (extends the billed end only),
 -- per-minute / block / VR-unit billing and the session-or-segment rounding scope. Every interval is
 -- one line at the 'standard' band: time-of-day prices such as happy hours are pricing rules.
--- Pricing rules: the rule matching p_act at p_rule_at (the session's or group's start; p_start when
+-- Pricing rules: the rule matching p_act at p_rule_at (the session's start; p_start when
 -- null) adjusts every band's unit price before billing (_pr_rule, _pr_rule_price); the result then
 -- carries rule: {name, adjust_kind, adjust_value}. A snapshot without rules prices as before.
--- Used by _pr_session_bill, _pr_sweep, _pr_group_bill and op_session_extend.
+-- Used by _pr_session_bill and op_session_extend.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._pr_quote (
   s       jsonb,

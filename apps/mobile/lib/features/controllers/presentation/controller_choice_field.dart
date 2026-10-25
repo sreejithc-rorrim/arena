@@ -38,11 +38,9 @@ class ControllerChoiceField extends ConsumerStatefulWidget {
     required this.choice,
     required this.onChanged,
     this.keepIds = const {},
-    this.pickedForOthers = const {},
     this.exceptOccupantId,
     this.maxCount,
     this.maxReason,
-    this.fixedCount,
     this.alternatives = const [],
   });
 
@@ -51,13 +49,10 @@ class ControllerChoiceField extends ConsumerStatefulWidget {
   final ControllerChoice choice;
   final ValueChanged<ControllerChoice> onChanged;
 
-  /// Pads the session/player being changed already holds.
+  /// Pads the session being changed already holds.
   final Set<String> keepIds;
 
-  /// Pad id → who in the draft/group already has it ("Player 2").
-  final Map<String, String> pickedForOthers;
-
-  /// The segment/assignment being changed (not "someone else" at a station).
+  /// The segment being changed (not "someone else" at a station).
   final String? exceptOccupantId;
 
   /// The game's local-player limit, when a game is chosen.
@@ -65,10 +60,6 @@ class ControllerChoiceField extends ConsumerStatefulWidget {
 
   /// Why counts above [maxCount] are disabled ("EA FC supports 4 players").
   final String? maxReason;
-
-  /// One pad per player (group, one system): no count chips; the request is
-  /// fixed at this many.
-  final int? fixedCount;
 
   /// Other stations that could host this session right now (free, right
   /// activity / mode / game). When the request is short here, those with
@@ -93,12 +84,10 @@ class _ControllerChoiceFieldState extends ConsumerState<ControllerChoiceField> {
     final controllers = ref.watch(controllersProvider);
     final open = ref.watch(openPadAllocationsProvider);
     final segs = ref.watch(openSegmentsProvider);
-    final assigns = ref.watch(openGroupAssignmentsProvider);
     final activities = ref.watch(activitiesProvider);
     if (!controllers.hasValue ||
         !open.hasValue ||
         !segs.hasValue ||
-        !assigns.hasValue ||
         !activities.hasValue) {
       return null;
     }
@@ -118,13 +107,6 @@ class _ControllerChoiceFieldState extends ConsumerState<ControllerChoiceField> {
             resourceId: s.resourceId,
             usesControllers: usesCtrl.contains(s.activityCode),
           ),
-      for (final a in assigns.value!)
-        if (a.id != widget.exceptOccupantId)
-          StationOccupant(
-            id: a.id,
-            resourceId: a.resourceId,
-            usesControllers: usesCtrl.contains(a.activityCode),
-          ),
     ];
     _busy = PadSelection.untrackedBusyStations(
       occupants: occupants,
@@ -143,20 +125,12 @@ class _ControllerChoiceFieldState extends ConsumerState<ControllerChoiceField> {
         open: open.value!,
       ),
       keepIds: widget.keepIds,
-      pickedForOthers: widget.pickedForOthers,
     );
   }
 
   /// The choice re-fitted to the current board (station / game / inventory).
-  ControllerChoice _fit(PadBoard board) {
-    final fixed = widget.fixedCount;
-    if (fixed != null) {
-      return board.tracked
-          ? widget.choice.request(fixed, board)
-          : ControllerChoice.count(fixed);
-    }
-    return widget.choice.reconcile(board, max: widget.maxCount);
-  }
+  ControllerChoice _fit(PadBoard board) =>
+      widget.choice.reconcile(board, max: widget.maxCount);
 
   void _emit(ControllerChoice next) {
     if (next != widget.choice) widget.onChanged(next);
@@ -172,7 +146,7 @@ class _ControllerChoiceFieldState extends ConsumerState<ControllerChoiceField> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (widget.fixedCount == null) _countChips(null, null),
+          _countChips(null, null),
           const SizedBox(height: AppSpacing.xs),
           Text(
             'Checking controllers…',
@@ -196,7 +170,7 @@ class _ControllerChoiceFieldState extends ConsumerState<ControllerChoiceField> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (widget.fixedCount == null) _countChips(choice, board),
+          _countChips(choice, board),
           const SizedBox(height: AppSpacing.xs),
           Text(
             "Controllers aren't in the inventory yet — billed by count.",
@@ -237,26 +211,13 @@ class _ControllerChoiceFieldState extends ConsumerState<ControllerChoiceField> {
         if (r.id != board.resourceId && need > 0 && (freeAt[r.id] ?? 0) >= need)
           '${r.name} (${freeAt[r.id]} free there)',
     ];
-    final atLimit =
-        widget.fixedCount != null && choice.padIds.length >= widget.fixedCount!;
     final atPorts = choice.padIds.length >= PadSelection.portCapacity;
 
-    void tap(PadOption o) {
-      var next = choice.toggle(o.id, board);
-      final fixed = widget.fixedCount;
-      if (fixed != null) {
-        next = ControllerChoice.tracked(
-          requested: fixed,
-          padIds: next.padIds,
-          borrowIds: next.borrowIds,
-        );
-      }
-      _emit(next);
-    }
+    void tap(PadOption o) => _emit(choice.toggle(o.id, board));
 
     Widget padChip(PadOption o) {
       final isPicked = choice.padIds.contains(o.id);
-      final canAdd = o.selectable && !atLimit && !atPorts;
+      final canAdd = o.selectable && !atPorts;
       // Pads elsewhere are listed under their station's name; the chip says
       // why one cannot be taken, and whose it is when it is away from home.
       final text = !o.selectable && o.note != null
@@ -275,7 +236,7 @@ class _ControllerChoiceFieldState extends ConsumerState<ControllerChoiceField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (widget.fixedCount == null) _countChips(choice, board),
+        _countChips(choice, board),
         const SizedBox(height: AppSpacing.sm),
         Text(
           picked.isEmpty ? 'Selected: none' : 'Selected: ${picked.join(', ')}',
@@ -423,7 +384,7 @@ String padLabels(Iterable<String> ids, List<Controller> controllers) {
 
 /// Borrowed pads still away from home, each with a "Returned" button that
 /// records the walk back (location history). With [sessionRef] it lists the
-/// pads that session/group borrowed (end/bill sheets); without it, every
+/// pads that session borrowed (end/bill sheets); without it, every
 /// loaned pad nobody is using right now (the controller board), so a return
 /// can still be recorded after the bill sheet has closed.
 class BorrowedPadsNotice extends ConsumerWidget {
@@ -434,7 +395,7 @@ class BorrowedPadsNotice extends ConsumerWidget {
     this.onToggle,
   });
 
-  /// `s:<sessionId>` or `g:<groupId>` (see [Controller.sessionRef]); null for
+  /// `s:<sessionId>` (see [Controller.sessionRef]); null for
   /// all idle loaned pads.
   final String? sessionRef;
 

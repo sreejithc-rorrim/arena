@@ -101,23 +101,6 @@ select is(pg_temp.push('payment.record', pg_temp.pay(5000, true))->>'status', 'a
 select is((select payment_status from sessions where id = '5e000000-0000-0000-0000-000000000001'),
   'partial', 'and the bill is partly paid again');
 
--- Group bills follow the same rule.
-insert into group_sessions(id, arena_id, primary_customer_id, player_count, purchased_controller_count,
-    status, payment_status, started_at, scheduled_end_at, actual_ended_at, pricing_snapshot,
-    billing_mode, billed_amount_paise)
-  values ('6e000000-0000-0000-0000-000000000001', 'e0000000-0000-4000-8000-000000000010',
-    '5c000000-0000-0000-0000-000000000001', 2, 2, 'completed', 'unpaid',
-    '2026-10-01T09:00:00Z', '2026-10-01T10:00:00Z', '2026-10-01T10:00:00Z',
-    _pricing_snapshot('e0000000-0000-4000-8000-000000000010'::uuid), 'per_system', 12000);
-select is(pg_temp.push('payment.record', jsonb_build_object('scope','group',
-    'parent_id','6e000000-0000-0000-0000-000000000001','payment_id', gen_random_uuid(),
-    'amount_paise', 12001, 'method','upi','is_refund', false))->>'error', 'overpayment',
-  'a group bill cannot be over-collected either');
-select is(pg_temp.push('payment.record', jsonb_build_object('scope','group',
-    'parent_id','6e000000-0000-0000-0000-000000000001','payment_id', gen_random_uuid(),
-    'amount_paise', 12000, 'method','upi','is_refund', false))->>'status', 'applied',
-  'the group balance is accepted');
-
 -- ------------------------------------------- 2. pad moves need a floor role
 select pg_temp.as_user('10000000-0000-0000-0000-000000000004');
 select is(pg_temp.push('controller.move', jsonb_build_object('controller_id', pg_temp.c('VOID-1'),

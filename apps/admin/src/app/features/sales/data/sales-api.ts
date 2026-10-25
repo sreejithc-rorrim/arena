@@ -10,7 +10,6 @@ import {
   BillDiscount,
   BillExtension,
   BillHistoryEntry,
-  BillKind,
   BillLine,
   BillPayment,
   PayMethod,
@@ -137,13 +136,11 @@ function ledgerOrder(a: BillPayment, b: BillPayment): number {
 }
 
 export function toBill(r: Row): Bill {
-  const kind: BillKind = r['kind'] === 'group' ? 'group' : 'single';
   const id = String(r['id']);
   const strings = (v: unknown) => ((v as string[] | null) ?? []).map(String);
   return {
-    kind,
     id,
-    ref: billRef(kind, id),
+    ref: billRef(id),
     at: String(r['at']),
     startedAt: String(r['started_at']),
     endedAt: text(r['ended_at']),
@@ -201,7 +198,6 @@ export function toDetail(r: Row): BillDetail {
   return {
     ...toBill(r),
     lines: ((r['lines'] as Row[] | null) ?? []).map((l): BillLine => ({
-      player: l['player'] == null ? null : Number(l['player']),
       station: String(l['station'] ?? ''),
       activity: String(l['activity'] ?? ''),
       controllers: l['controllers'] == null ? null : Number(l['controllers']),
@@ -238,7 +234,7 @@ export function toDetail(r: Row): BillDetail {
 }
 
 function scopeOf(bill: Bill) {
-  return { scope: bill.kind === 'group' ? 'group' : 'single', parent_id: bill.id };
+  return { scope: 'single', parent_id: bill.id };
 }
 
 class SupabaseSalesApi extends SalesApi {
@@ -316,9 +312,8 @@ class SupabaseSalesApi extends SalesApi {
 
   void(arenaId: string, bill: Bill, reason: string): Promise<void> {
     return this.push(arenaId, {
-      kind: bill.kind === 'group' ? 'group.void' : 'session.void',
-      payload:
-        bill.kind === 'group' ? { group_id: bill.id, reason } : { session_id: bill.id, reason },
+      kind: 'session.void',
+      payload: { session_id: bill.id, reason },
     });
   }
 

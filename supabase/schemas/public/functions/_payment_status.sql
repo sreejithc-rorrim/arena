@@ -2,8 +2,8 @@
 --
 -- 'paid' when paid >= billed, 'partial' when something but not all is paid,
 -- else 'unpaid'. A null billed (no final bill yet) is 'partial' if anything
--- was paid, else 'unpaid'. Used by op_payment, op_session_end and
--- op_group_end ('waived' is decided by the caller, not here).
+-- was paid, else 'unpaid'. Used by op_payment, op_session_record and
+-- op_session_end ('waived' is decided by the caller, not here).
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._payment_status (
   p_billed bigint,

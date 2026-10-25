@@ -19,7 +19,7 @@ create or replace function public._sync_hidden (
     select unnest(array['customers']) t
      where p_arena not in (select private.app_arena_ids_with(array['start', 'members', 'money', 'reports']))
     union all
-    select unnest(array['bill_discounts', 'group_charges', 'group_payments', 'payments', 'session_charges'])
+    select unnest(array['bill_discounts', 'payments', 'session_charges'])
      where p_arena not in (select private.app_arena_ids_with(array['bill', 'money', 'reports']))
     union all
     select unnest(array['discounts'])

@@ -190,10 +190,8 @@ void main() {
           'staff_profiles',
           'holidays',
           'billing_policies',
-          'group_charges',
           'session_charges',
           'session_extensions',
-          'group_extensions',
         ]),
       );
     },

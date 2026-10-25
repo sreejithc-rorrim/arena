@@ -4,7 +4,7 @@
 -- count) with no rate in it would bill ₹0. Refuses no_rate when the snapshot has no rate for the
 -- pair in any band, and activity_not_offered when the station lists the types it offers
 -- (resource_activities) and this is not one of them (a station with no list offers any).
--- Used by op_session_start and op_session_reconfigure.
+-- Used by op_session_start, op_session_reconfigure and op_session_record.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._seg_priced (
   p_arena    uuid,

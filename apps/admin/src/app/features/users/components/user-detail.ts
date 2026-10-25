@@ -84,7 +84,7 @@ import { initials, statusTone } from './user-format';
             <p role="note" class="text-[13px] leading-[1.45] text-muted">{{ note }}</p>
           } @else if (!isOwner()) {
             <p role="note" class="text-[13px] leading-[1.45] text-muted">
-              Only an owner can give or take away Payroll and Finalise salary.
+              Only an owner can give or take away Edit own bills and Add missed bills.
             </p>
           }
           @for (p of perms; track p.code) {
@@ -162,7 +162,7 @@ export class UserDetail {
   /** The signed-in login is an owner here (owner-only permissions are theirs to grant). */
   protected readonly isOwner = computed(() => this.arena.currentRole() === 'owner');
 
-  /** Payroll and Finalise salary: only an owner may switch them (staff.update refuses others). */
+  /** Edit own bills and Add missed bills: only an owner may switch them (staff.update refuses others). */
   protected ownerOnlyLocked(code: string): boolean {
     return OWNER_ONLY_PERMS.includes(code) && !this.isOwner();
   }

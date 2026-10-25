@@ -17,7 +17,7 @@ create or replace function public.sync_fetch_entity (
   select private.sync_fetch_entity(p_arena, p_refs);
 $function$;
 
-comment on function public.sync_fetch_entity(uuid, jsonb) is 'Client API (sync): for each {type, id} ref, return the server''s current rows for that whole entity (session, group, controller, customer or booking) so a device can replace its copy after a refused op.';
+comment on function public.sync_fetch_entity(uuid, jsonb) is 'Client API (sync): for each {type, id} ref, return the server''s current rows for that whole entity (session, controller, customer or booking) so a device can replace its copy after a refused op.';
 
 grant execute on function "public"."sync_fetch_entity"(uuid, jsonb) to "authenticated", "postgres", "service_role";
 

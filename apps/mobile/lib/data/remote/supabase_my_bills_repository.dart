@@ -7,7 +7,7 @@ import 'dart:async';
 
 import 'package:arena_ops/core/result/result.dart';
 import 'package:arena_ops/core/time/ist.dart';
-import 'package:arena_ops/data/remote/attendance_failures.dart';
+import 'package:arena_ops/data/remote/online_failures.dart';
 import 'package:arena_ops/data/remote/bill_failures.dart';
 import 'package:arena_ops/data/remote/online_calls.dart';
 import 'package:arena_ops/data/sync/sync_transport.dart';
@@ -77,7 +77,7 @@ class SupabaseMyBillsRepository implements MyBillsRepository {
   }) async {
     // Like onlineRead, but a refusal keeps its code (no_rate, invalid_time…).
     if (_client.auth.currentSession == null) {
-      return const Err(AttendanceFailures.signedOut);
+      return const Err(OnlineFailures.signedOut);
     }
     try {
       final r = await _client
@@ -130,7 +130,7 @@ class SupabaseMyBillsRepository implements MyBillsRepository {
     });
   }
 
-  /// The shared offline failure talks about clocking in.
+  /// The shared offline failure is generic; bills say it in their own words.
   Result<T> _reworded<T>(Result<T> res) => switch (res) {
     Err(failure: final f) when f.code == BillFailures.offline.code => const Err(
       BillFailures.offline,

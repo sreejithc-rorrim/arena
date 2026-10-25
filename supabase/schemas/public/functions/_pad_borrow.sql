@@ -5,7 +5,7 @@
 -- unallocated, and its station free of untracked play (controller_missing / controller_unusable /
 -- controller_taken). Moves it and logs controller_moves as 'returnHome' when p_resource is its home,
 -- else 'loan' (loan_return_to = home, loan_session_ref = p_session_ref). Returns the skip count.
--- Pads are locked by the caller. Used by op_session_start, op_session_reconfigure and _group_place.
+-- Pads are locked by the caller. Used by op_session_start and op_session_reconfigure.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._pad_borrow (
   p_arena       uuid,
@@ -57,7 +57,7 @@ begin
 end;
 $function$;
 
-comment on function public._pad_borrow(uuid, jsonb, uuid, text, timestamp with time zone) is 'Moves pads to a station for a session or group, recording loans and returns home; returns how many were already there.';
+comment on function public._pad_borrow(uuid, jsonb, uuid, text, timestamp with time zone) is 'Moves pads to a station for a session, recording loans and returns home; returns how many were already there.';
 
 grant execute
   on function "public"."_pad_borrow"(uuid, jsonb, uuid, text, timestamp with time zone)

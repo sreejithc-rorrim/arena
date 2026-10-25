@@ -10,7 +10,6 @@ const ALL = [
   'money',
   'reports',
   'settings',
-  'attendance_review',
 ];
 
 /** Deterministic in-memory ArenaApi for tests: the design's two arenas, owned by the caller. */

@@ -63,8 +63,8 @@ begin
     values (v_segment, p_arena, v_session, 0, v_resource, v_act, v_game, v_cc, v_started, v_now);
 
   v_skipped := _pad_borrow(p_arena, p->'moves', v_resource, 's:' || v_session::text, v_started);
-  perform _pad_allocate(p_arena, p->'allocations', 'single', v_session, null, v_segment, null,
-    null, null, v_resource, v_act, v_game, v_started);
+  perform _pad_allocate(p_arena, p->'allocations', v_session, v_segment, v_resource, v_act, v_game,
+    v_started);
 
   update customers set last_visit_at = v_started, updated_at = v_now
     where id = v_customer and arena_id = p_arena;

@@ -1,6 +1,6 @@
 -- _pr_rule(s, p_act, p_at) — the pricing rule of snapshot s that applies to p_act started at p_at.
 --
--- Judged in Asia/Kolkata on p_at (the session's or group's start): the IST weekday must be in
+-- Judged in Asia/Kolkata on p_at (the session's start): the IST weekday must be in
 -- days, the whole minute of day (seconds dropped) in [start_min, end_min), the IST date inside [valid_from, valid_until],
 -- holiday_mode against s.holidays (only / skip / any), and p_act in activity_codes (empty = all).
 -- The first match by priority, then name, then id (code-point order, collate "C", as the

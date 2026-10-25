@@ -12,7 +12,7 @@ describe('billing policy', () => {
     expect(parsePolicy(null)).toEqual(DEFAULT_POLICY);
   });
 
-  it('reads a row and writes back every field (group mode inside the policy)', () => {
+  it('reads a row and writes back every field', () => {
     const row = {
       billing_unit: 'block_30',
       block_rounding: 'nearest',
@@ -27,10 +27,9 @@ describe('billing policy', () => {
       payment_timing: 'start',
       allow_extend_past_close: true,
       cleaning_gap_minutes: 10,
-      group_billing_mode: 'shared_controller_pool',
     };
     expect(policyJson(parsePolicy(row))).toEqual(row);
-    expect(Object.keys(policyJson(DEFAULT_POLICY)).length).toBe(14);
+    expect(Object.keys(policyJson(DEFAULT_POLICY)).length).toBe(13);
   });
 
   it('an unknown value reads as the default', () => {

@@ -18,7 +18,6 @@ import 'package:arena_ops/core/widgets/confirm_dialog.dart';
 import 'package:arena_ops/domain/auth/permission.dart';
 import 'package:arena_ops/domain/bills/my_bill.dart';
 import 'package:arena_ops/domain/value/enums.dart';
-import 'package:arena_ops/features/money/application/money_today.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

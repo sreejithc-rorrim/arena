@@ -28,7 +28,6 @@ import 'package:arena_ops/domain/repositories/booking_repository.dart';
 import 'package:arena_ops/domain/repositories/catalog_repository.dart';
 import 'package:arena_ops/domain/repositories/commands.dart';
 import 'package:arena_ops/domain/repositories/controller_allocation_reader.dart';
-import 'package:arena_ops/domain/repositories/group_session_repository.dart';
 import 'package:arena_ops/domain/repositories/session_repository.dart';
 import 'package:arena_ops/domain/services/availability_service.dart';
 import 'package:arena_ops/domain/services/pad_selection.dart';
@@ -125,7 +124,6 @@ ControllerChoice resolveControllerChoice(
 class SessionActions {
   SessionActions({
     required this.sessions,
-    required this.groups,
     required this.catalog,
     required this.bookings,
     required this.clock,
@@ -139,7 +137,6 @@ class SessionActions {
   });
 
   final SessionRepository sessions;
-  final GroupSessionRepository groups;
   final CatalogRepository catalog;
 
   /// Read to keep a walk-in off a station someone has reserved.
@@ -167,9 +164,7 @@ class SessionActions {
       at.add(const Duration(hours: 12));
 
   /// Everything that holds a station over [window]: the open segment of each
-  /// active session, every open group assignment (group feature §7 — a single
-  /// session must not take a system a group is using), and **bookings that
-  /// overlap the window**.
+  /// active session, and **bookings that overlap the window**.
   ///
   /// Bookings belong here: a walk-in started over the top of a reservation is
   /// exactly the double-booking the reservation was made to prevent, and it is
@@ -181,7 +176,6 @@ class SessionActions {
     String? excludeSessionId,
   }) async {
     final active = await sessions.active();
-    final activeGroups = await groups.activeGroups();
     final booked = await bookings.overlapping(window.start, window.end);
     return [
       for (final a in active)
@@ -193,14 +187,6 @@ class SessionActions {
               a.session.scheduledEndAt,
             ),
             isBooking: false,
-          ),
-      for (final g in activeGroups)
-        for (final seg in g.openAssignments)
-          Occupancy(
-            resourceId: seg.resourceId,
-            interval: UtcInterval(seg.startedAt, g.group.scheduledEndAt),
-            isBooking: false,
-            label: 'group',
           ),
       // `overlapping` returns only still-open (`booked`) reservations, so a
       // cancelled, no-show or already-checked-in booking never blocks.
@@ -251,7 +237,6 @@ class SessionActions {
   PadBoardLoader get boards => PadBoardLoader(
     catalog: catalog,
     sessions: sessions,
-    groups: groups,
     pads: pads,
   );
 
@@ -873,7 +858,6 @@ class SessionActions {
 final sessionActionsProvider = Provider<SessionActions>(
   (ref) => SessionActions(
     sessions: ref.watch(sessionRepositoryProvider),
-    groups: ref.watch(groupSessionRepositoryProvider),
     catalog: ref.watch(catalogRepositoryProvider),
     bookings: ref.watch(bookingRepositoryProvider),
     clock: ref.watch(clockProvider),

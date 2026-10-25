@@ -10,10 +10,6 @@
     <!-- Cloud sync (Supabase). Only the debug/profile manifests had this, so a
          release build could not reach the server at all. -->
     <uses-permission android:name="android.permission.INTERNET"/>
-    <!-- Attendance: one foreground location reading at each clock-in / clock-out
-         (no background location, never tracked between punches). -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <application
         android:label="${appName}"
         android:name="${applicationName}"

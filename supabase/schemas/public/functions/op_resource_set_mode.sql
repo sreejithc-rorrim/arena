@@ -4,7 +4,7 @@
 -- Permission: settings.
 -- Payload: id, mode (activity code; empty/null clears the lock).
 -- Checks / errors: forbidden; not_found (hint resource); mode_switch_busy (station has an open
---   segment or group assignment).
+--   session segment).
 -- Writes: resources.current_mode. Returns: {}.
 -- Server-only: not executable by anon/authenticated; reached through sync_push.
 create or replace function public.op_resource_set_mode (
@@ -21,8 +21,7 @@ begin
   perform _need(p_arena, 'settings');
   perform 1 from resources where id = v_id and arena_id = p_arena for update;
   if not found then raise exception 'not_found' using hint = 'resource'; end if;
-  if exists (select 1 from session_segments where resource_id = v_id and ended_at is null)
-     or exists (select 1 from group_assignments where resource_id = v_id and ended_at is null) then
+  if exists (select 1 from session_segments where resource_id = v_id and ended_at is null) then
     raise exception 'mode_switch_busy';
   end if;
   update resources set current_mode = nullif(p->>'mode',''), updated_at = statement_timestamp()

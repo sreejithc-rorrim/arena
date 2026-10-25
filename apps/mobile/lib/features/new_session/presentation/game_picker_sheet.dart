@@ -1,4 +1,3 @@
-import 'package:arena_ops/app/controllers/catalog_actions.dart';
 import 'package:arena_ops/app/providers/data_providers.dart';
 import 'package:arena_ops/core/theme/app_theme.dart';
 import 'package:arena_ops/domain/entities/game.dart';
@@ -42,14 +41,9 @@ class _GamePicker extends ConsumerStatefulWidget {
 class _GamePickerState extends ConsumerState<_GamePicker> {
   String _query = '';
 
-  void _openLibrary() => openGameLibrary(context);
-  void _addGame() => openAddGame(context, name: _query);
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // The library edits the catalog: only for those the server lets do it.
-    final canEdit = ref.watch(catalogActionsProvider).canChangeSettings;
     final playable = (ref.watch(gamesForResourceProvider(widget.resourceId)).value ?? [])
         .where((g) => g.status.isPlayable)
         .map((g) => g.game)
@@ -82,12 +76,6 @@ class _GamePickerState extends ConsumerState<_GamePicker> {
                   ],
                 ),
               ),
-              if (canEdit)
-                TextButton.icon(
-                  onPressed: _openLibrary,
-                  icon: const Icon(Icons.tune, size: 18),
-                  label: const Text('Manage'),
-                ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -105,8 +93,6 @@ class _GamePickerState extends ConsumerState<_GamePicker> {
                 ? NoGamesState(
                     query: _query.trim(),
                     resourceName: widget.resourceName,
-                    onAdd: canEdit ? _addGame : null,
-                    onLibrary: canEdit ? _openLibrary : null,
                   )
                 : ListView.builder(
                     itemCount: playable.length,
@@ -167,7 +153,6 @@ class _ActivityGamePickerState extends ConsumerState<_ActivityGamePicker> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final gamesAsync = ref.watch(activeGamesProvider);
-    final canEdit = ref.watch(catalogActionsProvider).canChangeSettings;
     final playable = ref.watch(gamesPlayableForActivityProvider(widget.activityCode)).value;
 
     List<Game> filter(List<Game> all) {
@@ -203,11 +188,6 @@ class _ActivityGamePickerState extends ConsumerState<_ActivityGamePicker> {
                   ],
                 ),
               ),
-              TextButton.icon(
-                onPressed: () => openGameLibrary(context),
-                icon: const Icon(Icons.tune, size: 18),
-                label: const Text('Manage'),
-              ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -231,8 +211,6 @@ class _ActivityGamePickerState extends ConsumerState<_ActivityGamePicker> {
                   return NoGamesState(
                     query: _query.trim(),
                     resourceName: widget.activityLabel,
-                    onAdd: canEdit ? () => openAddGame(context, name: _query) : null,
-                    onLibrary: canEdit ? () => openGameLibrary(context) : null,
                   );
                 }
                 return ListView.builder(

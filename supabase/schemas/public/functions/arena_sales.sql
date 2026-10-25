@@ -18,7 +18,7 @@ create or replace function public.arena_sales (
   select private.arena_sales(p_arena, p_from, p_to);
 $function$;
 
-comment on function public.arena_sales(uuid, timestamptz, timestamptz) is 'Client API (owner level): the arena''s closed bills (sessions and groups, completed or voided) that closed in [from, to), newest first, for the admin dashboard''s Sales screen. At most 93 days.';
+comment on function public.arena_sales(uuid, timestamptz, timestamptz) is 'Client API (owner level): the arena''s closed bills (sessions, completed or voided) that closed in [from, to), newest first, for the admin dashboard''s Sales screen. At most 93 days.';
 
 grant execute on function "public"."arena_sales"(uuid, timestamptz, timestamptz) to "authenticated", "postgres", "service_role";
 

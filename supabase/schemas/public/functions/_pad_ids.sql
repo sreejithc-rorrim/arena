@@ -1,8 +1,8 @@
 -- _pad_ids(p) — controller ids of a jsonb array of pad objects.
 --
 -- Collects e->>'controller_id' of each element as uuid[]; '{}' for null or empty. Parses the
--- 'moves' and 'allocations' payloads of op_session_start, op_session_reconfigure, _group_lock,
--- _group_place and _pad_allocate.
+-- 'moves' and 'allocations' payloads of op_session_start, op_session_reconfigure and
+-- _pad_allocate.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._pad_ids (
   p jsonb

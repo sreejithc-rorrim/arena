@@ -103,12 +103,12 @@ select is(pg_temp.push('controller.upsert', jsonb_build_object('id','ad000000-00
 select is((select kind_id from controllers where id = 'ad000000-0000-0000-0000-000000000001'),
   'ac000000-0000-0000-0000-000000000001'::uuid, '…and the kind is kept');
 
--- Supply counts only pads.
-select is(_usable_pads_at('e0000000-0000-4000-8000-000000000123'::uuid, pg_temp.r('RIFT')),
+-- Supply counts only pads (no pad is allocated yet, so every usable pad is free).
+select is(_free_pads_at('e0000000-0000-4000-8000-000000000123'::uuid, pg_temp.r('RIFT')),
   (select count(*)::int from controllers where current_resource_id = pg_temp.r('RIFT')
      and status = 'usable' and kind_id is null),
   'the headset is not counted as a usable pad at RIFT');
-select is(_usable_pads_at('e0000000-0000-4000-8000-000000000123'::uuid, pg_temp.r('HEX')),
+select is(_free_pads_at('e0000000-0000-4000-8000-000000000123'::uuid, pg_temp.r('HEX')),
   (select count(*)::int from controllers where current_resource_id = pg_temp.r('HEX') and status = 'usable'),
   'a Controller-kind accessory counts as a pad at HEX');
 

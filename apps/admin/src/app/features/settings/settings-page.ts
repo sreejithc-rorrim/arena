@@ -70,7 +70,7 @@ const SECTIONS: readonly {
     key: 'staff',
     icon: 'badge',
     title: 'Staff',
-    sub: 'Schedule, clock-in, attendance, leave, payroll rules',
+    sub: 'Staff terms',
   },
 ];
 
@@ -79,8 +79,8 @@ const NEEDS_PRICING: readonly Section[] = ['arena', 'types', 'billing'];
 
 /**
  * Settings: the arena, its station and accessory types, games, billing, billing rules, sessions,
- * owners and staff. The selected group is in the URL path (`/settings/billing`; Staff's tabs below it,
- * `/settings/staff/leave`), matched as componentless child routes so the list stays mounted; on
+ * owners and staff. The selected group is in the URL path (`/settings/billing`,
+ * `/settings/games/<game>`), matched as componentless child routes so the list stays mounted; on
  * a wide screen Arena is shown when none is chosen.
  */
 @Component({
@@ -147,7 +147,7 @@ const NEEDS_PRICING: readonly Section[] = ['arena', 'types', 'billing'];
             <app-owners-access (closed)="close()" />
           }
           @case ('staff') {
-            <app-staff-settings [tab]="params()['tab']" [item]="params()['item']" (closed)="close()" />
+            <app-staff-settings (closed)="close()" />
           }
         }
       </ng-container>

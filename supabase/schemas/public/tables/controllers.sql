@@ -8,7 +8,7 @@
 -- loan records the return it owes (loan_return_to / loan_session_ref) and appends
 -- a controller_moves row. Written by op_controller_upsert / op_controller_set_status
 -- (settings), op_controller_move (controller.move) and the borrow step of session
--- and group starts (_pad_borrow); seeded by _seed_arena_catalog. Per-player use is
+-- starts (_pad_borrow); seeded by _seed_arena_catalog. Per-player use is
 -- in controller_allocations (at most one open allocation per pad).
 create table "public"."controllers" (
   "id"                  uuid                     not null default gen_random_uuid(),
@@ -59,7 +59,7 @@ comment on column public.controllers.notes is 'Why the pad is in its current sta
 
 comment on column public.controllers.loan_return_to is 'Set while the pad is on loan away from home: the home station id (uuid as text) it must go back to; null otherwise.';
 
-comment on column public.controllers.loan_session_ref is 'Set while on loan: the session that owes the return, as s:<sessionId> or g:<groupId> (app reference string, not a foreign key).';
+comment on column public.controllers.loan_session_ref is 'Set while on loan: the session that owes the return, as s:<sessionId> (app reference string, not a foreign key).';
 
 comment on column public.controllers.sync_xid is 'Id of the transaction that last wrote the row (set by trigger sync_stamp); change-feed cursor for sync_pull.';
 

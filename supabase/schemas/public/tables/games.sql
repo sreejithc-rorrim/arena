@@ -3,8 +3,8 @@
 -- One row per title the arena offers. Written by op_game_upsert (game.upsert),
 -- op_game_set_active (game.set_active: archive / restore) and op_game_delete
 -- (game.delete: only a game nothing ever referred to; a used game is archived instead,
--- since session_segments, group_assignments and controller_allocations keep pointing at
--- it with no cascade); op_session_start, op_session_reconfigure and group placement bump
+-- since session_segments and controller_allocations keep pointing at
+-- it with no cascade); op_session_start and op_session_reconfigure bump
 -- last_played_at. max_local_players caps the controllers one system may use on this game
 -- (players_exceeded otherwise). Per-station availability lives in game_resources, button
 -- guides in game_controls (both deleted with the game).
@@ -57,11 +57,11 @@ comment on column public.games.platforms is 'Platform tags the title runs on (e.
 
 comment on column public.games.play_modes is 'How the title can be played, one or more of story (story mode / campaign), single (single player, e.g. against the computer), local (local multiplayer), online (online multiplayer); listed in that order.';
 
-comment on column public.games.max_local_players is 'Most players (controllers) one system may use at once on this title, 1-8. Starts, reconfigures and group placements above it are refused with players_exceeded.';
+comment on column public.games.max_local_players is 'Most players (controllers) one system may use at once on this title, 1-8. Starts and reconfigures above it are refused with players_exceeded.';
 
 comment on column public.games.active is 'False archives the title: hidden from new sessions and bookings on every device, kept for the sessions, bills and bookings that refer to it (game.set_active).';
 
-comment on column public.games.last_played_at is 'Start time (UTC) of the latest session segment or group placement on this game.';
+comment on column public.games.last_played_at is 'Start time (UTC) of the latest session segment on this game.';
 
 comment on column public.games.sync_xid is 'Id of the transaction that last wrote the row (set by trigger sync_stamp); change-feed cursor for sync_pull.';
 

@@ -155,10 +155,10 @@ Decided 2026-10-19: **production is a fresh project** on the current history
 * Before every `supabase db push`: a `pg_dump --schema-only` and a
   `--data-only` of the linked project.
 * Once before go-live, restore one backup into a scratch project and check that
-  sessions, payments and salary runs are there (a restore drill).
+  sessions and payments are there (a restore drill).
 * Money, audit and evidence rows are append-only in the database itself
-  (`_append_only` triggers on payments, charges, bill discounts, `audit_log`,
-  salary adjustments, punches and pad moves): deleting a session or an arena
+  (`_append_only` triggers on payments, charges, bill discounts, `audit_log`
+  and pad moves): deleting a session or an arena
   that has them is refused. To really remove test data (a whole test arena, or a
   kept arena's pre-release activity, plus test logins) use
   `supabase/audit/prod_prerelease_reset.sql`, after an inventory
@@ -242,7 +242,7 @@ of the app. Serve it at the https URL you set as Site URL (step 3.4).
 4. **Check the e-mail setup once**: step 3.1 (SMTP, both templates, sign-ups on) and step 3.4 (the dashboard's `/accept-invite` in Redirect URLs). Nothing to deploy: the dashboard asks Supabase Auth to send the invitation itself. If an older version deployed the `staff-admin` Edge Function, delete it (`supabase functions delete staff-admin`).
 5. **Admin dashboard** → Users → **Invite user**: name, e-mail, role (staff, or owner for a co-owner — only an owner may invite an owner) and permissions. No password: the person receives the link by e-mail (valid 7 days; a newer invite to the same address replaces it). Pending invitations are listed on the Users page with **Withdraw**.
 6. The person opens the link → the dashboard's `/accept-invite` page → a new login chooses its own password (an existing one may keep its own) → accepted. Their confirmed e-mail must be the invited address. On their phone: *Sign in* with that e-mail and password.
-7. To remove a staff member's access: admin dashboard → Users → **Deactivate** (their device returns to sign-in; their Realtime access ends within the JWT expiry). **Never delete the login** of anyone who has punched in, applied for leave or been on a pay run: their attendance, leave and salary lines are records, and the database refuses the delete (`staff_profiles` → staff tables are `no action`, not cascade). Deactivating is enough. Only a login that never did anything (e.g. a mistyped invitation) can be deleted under Authentication → Users.
+7. To remove a staff member's access: admin dashboard → Users → **Deactivate** (their device returns to sign-in; their Realtime access ends within the JWT expiry). **Don't delete the login** of anyone who has used the app: deactivating is enough and keeps their history attributed. Only a login that never did anything (e.g. a mistyped invitation) can be deleted under Authentication → Users.
 8. Run the multi-device checks on **different networks** (one on mobile data):
    * start a session on one phone, see it on the other within about a second (Realtime), at worst on the next 10 s poll;
    * put one phone in airplane mode, take a payment and start a session there; reconnect; confirm it syncs (or, if the other phone took the same station meanwhile, that it is refused and shown under Sync → Needs attention, money included);

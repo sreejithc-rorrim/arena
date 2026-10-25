@@ -7,16 +7,11 @@ import 'package:arena_ops/core/theme/app_theme.dart';
 import 'package:arena_ops/core/widgets/app_toast.dart';
 import 'package:arena_ops/core/widgets/arena_header.dart';
 import 'package:arena_ops/core/widgets/arena_list.dart';
-import 'package:arena_ops/core/widgets/arena_placeholder_page.dart';
 import 'package:arena_ops/domain/auth/permission.dart';
-import 'package:arena_ops/features/attendance/presentation/attendance_screen.dart';
 import 'package:arena_ops/features/auth/presentation/change_password_dialog.dart';
 import 'package:arena_ops/features/controllers/presentation/controller_board_screen.dart';
 import 'package:arena_ops/features/customers/presentation/customers_screen.dart';
-import 'package:arena_ops/features/leave/presentation/leave_screen.dart';
-import 'package:arena_ops/features/bills/presentation/my_bills_screen.dart';
 import 'package:arena_ops/features/more/presentation/help_screen.dart';
-import 'package:arena_ops/features/more/presentation/settings_screen.dart';
 import 'package:arena_ops/features/notifications/presentation/notification_settings_screen.dart';
 import 'package:arena_ops/features/profile/presentation/my_profile_screen.dart';
 import 'package:arena_ops/features/reports/presentation/session_log_screen.dart';
@@ -24,8 +19,8 @@ import 'package:arena_ops/features/sync/presentation/sync_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// The "More" tab — shift, arena settings, floor tools and account. Owner-only
-/// entries (Settings, Members) are hidden from staff who lack the permission.
+/// The "More" tab — your profile, floor tools and account. Members is hidden
+/// from staff who lack the permission. Arena settings are on the admin web.
 class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});
 
@@ -33,17 +28,6 @@ class MoreScreen extends ConsumerWidget {
 
   void _push(BuildContext context, Widget page) {
     AppNav.to(context, page);
-  }
-
-  /// An honest dead end: the design has this area, this build does not. Says
-  /// so plainly rather than describing a feature that is not there.
-  void _notBuilt(BuildContext context, String title, String what, IconData icon) {
-    _push(context, ArenaPlaceholderPage(
-      title: title,
-      subtitle: '$what is not part of this build yet, so nothing is recorded '
-          'here. Everything else on the floor works without it.',
-      icon: icon,
-    ));
   }
 
   /// Before closing this arena's database with [pending] changes unsent:
@@ -78,10 +62,8 @@ class MoreScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final arena = context.arena;
     final user = ref.watch(authControllerProvider);
-    final canSettings = user?.can(Permission.settings) ?? false;
     final canMembers = user?.can(Permission.members) ?? false;
     final caps = ref.watch(venueCapabilitiesProvider);
-    final noun = ref.watch(resourceNounProvider).many.toLowerCase();
     final cloud = ref.watch(cloudBindingProvider);
     final pending = ref.watch(syncStatusProvider).value?.pending ?? 0;
     final alerts = ref.watch(notificationSettingsProvider).value;
@@ -95,45 +77,14 @@ class MoreScreen extends ConsumerWidget {
           children: [
             const ArenaScreenHeader(title: 'More'),
             if (user != null) _AccountCard(name: user.name, role: user.roleLabel),
-            _Group('Shift', [
-              ArenaListRow(
-                icon: Icons.fingerprint_rounded,
-                title: 'Attendance',
-                subtitle: 'Clock in and out, my hours',
-                onTap: () => _push(context, const AttendanceScreen()),
-              ),
-              ArenaListRow(
-                icon: Icons.event_busy_rounded,
-                title: 'Leave',
-                subtitle: 'My balance, apply and track requests',
-                onTap: () => _push(context, const LeaveScreen()),
-              ),
+            _Group('Me', [
               ArenaListRow(
                 icon: Icons.badge_outlined,
                 title: 'My profile',
                 subtitle: 'Contact, address and emergency contact',
                 onTap: () => _push(context, const MyProfileScreen()),
               ),
-              ArenaListRow(
-                icon: Icons.warning_amber_rounded,
-                title: 'Issues',
-                subtitle: 'Report and resolve downtime',
-                onTap: () => _notBuilt(context, 'Issues',
-                    'The issue and downtime log',
-                    Icons.warning_amber_rounded),
-              ),
             ]),
-            if (canSettings)
-              _Group('Arena', [
-                ArenaListRow(
-                  icon: Icons.settings_outlined,
-                  title: 'Settings',
-                  subtitle: caps.games
-                      ? 'Pricing, hours, holidays, $noun, games, staff'
-                      : 'Pricing, hours, holidays, $noun, staff',
-                  onTap: () => _push(context, const SettingsScreen()),
-                ),
-              ]),
             _Group('Floor tools', [
               if (canMembers)
                 ArenaListRow(
@@ -155,18 +106,6 @@ class MoreScreen extends ConsumerWidget {
                 subtitle: 'Every session, searchable',
                 onTap: () => _push(context, const SessionLogScreen()),
               ),
-              // Online only: the server lists and re-checks your own bills.
-              // Staff have it as the Bills tab; owner-level users here.
-              if (cloud != null &&
-                  ((user?.can(Permission.billEdit) ?? false) ||
-                      (user?.can(Permission.billRecord) ?? false)) &&
-                  (user?.isOwner ?? false))
-                ArenaListRow(
-                  icon: Icons.edit_note_rounded,
-                  title: 'My bills',
-                  subtitle: 'Bills you started; change the amount with a comment',
-                  onTap: () => _push(context, const MyBillsScreen()),
-                ),
             ]),
             _Group('You', [
               // This phone's own alerts: everyone's, staff included.

@@ -2,7 +2,8 @@
 --
 -- SELECT ... ORDER BY id FOR UPDATE on the arena's resources. Always taken before _lock_pads;
 -- the fixed order prevents deadlocks between concurrent ops.
--- Used by _group_lock, op_session_start, op_session_reconfigure and op_controller_move.
+-- Used by op_session_start, op_session_reconfigure, op_controller_move, op_resource_upsert and
+-- op_resource_set_status.
 -- Server-only: not executable by anon/authenticated.
 create or replace function public._lock_resources (
   p_arena uuid,

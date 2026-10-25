@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// staff on the Sync screen, never shown as a bare code.
 void main() {
   // The codes the op_* functions behind the floor app's ops raise (sessions,
-  // groups, payments, pads, customers, bookings, settings), plus the codes
+  // payments, pads, customers, bookings, settings), plus the codes
   // sync_push maps SQL errors to.
   const codes = [
     'resource_busy', 'controller_taken', 'controller_elsewhere',
@@ -15,7 +15,6 @@ void main() {
     'price_mismatch', 'pricing_snapshot_mismatch', 'no_rate', 'overpayment',
     'refund_exceeds_paid', 'refund_reason_required', 'amount_zero',
     'amount_negative', 'invalid_method', 'invalid_time', 'no_open_segment',
-    'no_open_assignment', 'no_assignments', 'player_busy', 'game_conflict',
     'resource_unavailable', 'resource_missing', 'missing_reference',
     'activity_missing', 'mode_switch_busy', 'controllers_exceeded',
     'controller_count_mismatch', 'controller_unusable', 'controller_missing',

@@ -1,7 +1,7 @@
 -- _offline_rules(p) — validate the arena's offline window (settings key 'offline_rules')
 --
 -- Shape: {max_offline_hours: n}, nothing else. n = 1–720 whole hours: how old a device-stamped
--- session or group time may be when it reaches the server (_client_time refuses older ones as
+-- session time may be when it reaches the server (_client_time refuses older ones as
 -- time_too_old). Without the setting the window is 24 hours.
 -- Raises invalid_offline_rules (hint names the field) otherwise.
 -- Server-only: used by op_settings_save; not executable by anon/authenticated.

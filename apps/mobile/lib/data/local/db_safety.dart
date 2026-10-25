@@ -98,8 +98,6 @@ class DbSafety {
     'sessions',
     'session_segments',
     'payments',
-    'group_sessions',
-    'group_payments',
     'bookings',
     'customers',
     'users',

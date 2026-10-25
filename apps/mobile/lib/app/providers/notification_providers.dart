@@ -64,7 +64,6 @@ final sessionRemindersProvider = Provider<SessionReminders>(
   (ref) => SessionReminders(
     service: ref.watch(notificationServiceProvider),
     sessions: ref.watch(sessionRepositoryProvider),
-    groups: ref.watch(groupSessionRepositoryProvider),
     customers: ref.watch(customerRepositoryProvider),
     catalog: ref.watch(catalogRepositoryProvider),
     settingsRepo: ref.watch(notificationSettingsRepositoryProvider),

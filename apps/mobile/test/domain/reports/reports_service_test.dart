@@ -8,15 +8,12 @@ library;
 import 'package:arena_ops/core/time/business_calendar.dart';
 import 'package:arena_ops/core/time/ist.dart';
 import 'package:arena_ops/domain/entities/customer.dart';
-import 'package:arena_ops/domain/entities/group_session.dart';
 import 'package:arena_ops/domain/entities/payment.dart';
 import 'package:arena_ops/domain/entities/resource.dart';
 import 'package:arena_ops/domain/entities/session.dart';
 import 'package:arena_ops/domain/reports/report_models.dart';
 import 'package:arena_ops/domain/reports/reports_service.dart';
 import 'package:arena_ops/domain/value/enums.dart';
-import 'package:arena_ops/features/reports/application/report_export.dart';
-import 'package:excel/excel.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/pricing_fixtures.dart';
@@ -118,10 +115,6 @@ void main() {
     List<SessionSegment> segments = const [],
     List<SessionCharge> charges = const [],
     List<Payment> payments = const [],
-    List<GroupSession> groups = const [],
-    List<GroupAssignment> groupAssignments = const [],
-    List<GroupCharge> groupCharges = const [],
-    List<GroupPayment> groupPayments = const [],
     List<Customer> customers = const [],
   }) =>
       ReportInput(
@@ -130,10 +123,6 @@ void main() {
         segments: segments,
         charges: charges,
         payments: payments,
-        groups: groups,
-        groupAssignments: groupAssignments,
-        groupCharges: groupCharges,
-        groupPayments: groupPayments,
         customers: customers,
         resources: const [
           Resource(id: 'hex', name: 'HEX', kind: ResourceKind.station),
@@ -379,10 +368,6 @@ void main() {
         ],
         charges: const [],
         payments: const [],
-        groups: const [],
-        groupAssignments: const [],
-        groupCharges: const [],
-        groupPayments: const [],
         customers: const [],
         resources: const [
           Resource(id: 'hex', name: 'HEX', kind: ResourceKind.station),
@@ -534,91 +519,6 @@ void main() {
       expect(row.collectedPaise, 10000);
       expect(row.pendingPaise, 12500);
       expect(row.paymentStatus, PaymentStatus.partial);
-    });
-  });
-
-  group('the Excel export matches the report it was built from', () {
-    test('summary and session sheets carry the same figures', () {
-      final report = service.build(input(
-        range: ReportRange.today(day),
-        sessions: [
-          session(
-            id: 's1',
-            customerId: 'c1',
-            start: ist(2026, 10, 6, 18, 0),
-            end: ist(2026, 10, 6, 19, 0),
-            billed: 15000,
-            status: PaymentStatus.partial,
-          ),
-        ],
-        segments: [
-          segment(
-            id: 'seg1',
-            sessionId: 's1',
-            resourceId: 'hex',
-            start: ist(2026, 10, 6, 18, 0),
-            end: ist(2026, 10, 6, 19, 0),
-            gameId: 'g1',
-          ),
-        ],
-        payments: [
-          payment(sessionId: 's1', amount: 10000, at: ist(2026, 10, 6, 19, 0)),
-        ],
-        customers: [customer],
-      ));
-
-      final bytes = const ReportExporter().buildWorkbook(report);
-      expect(bytes, isNotEmpty);
-
-      final book = Excel.decodeBytes(bytes);
-      expect(
-        book.tables.keys,
-        containsAll(<String>[
-          'Summary',
-          'By day',
-          'Revenue',
-          'Stations',
-          'Games',
-          'Sessions',
-        ]),
-      );
-
-      // A whole number may come back as an int cell, so read either shape.
-      double asNumber(CellValue? v) {
-        if (v is DoubleCellValue) return v.value;
-        if (v is IntCellValue) return v.value.toDouble();
-        fail('Expected a numeric cell, got $v');
-      }
-
-      double numberAfter(String sheet, String label) {
-        for (final row in book.tables[sheet]!.rows) {
-          if (row.isNotEmpty && row.first?.value is TextCellValue) {
-            final text = (row.first!.value as TextCellValue).value.text;
-            if (text == label) {
-              return asNumber(row[1]?.value);
-            }
-          }
-        }
-        fail('No "$label" row in $sheet');
-      }
-
-      // Rupees in the sheet, paise in the report — the same money.
-      expect(numberAfter('Summary', 'Billed (₹)'), 150.0);
-      expect(numberAfter('Summary', 'Collected (₹)'), 100.0);
-      expect(numberAfter('Summary', 'Pending (₹)'), 50.0);
-      expect(numberAfter('Summary', 'Sessions'), 1);
-      expect(numberAfter('Summary', 'Gaming hours'), 1.0);
-
-      // One header row + one session row.
-      final sessions = book.tables['Sessions']!;
-      expect(sessions.rows.length, 2);
-      final row = sessions.rows[1];
-      expect((row[2]!.value as TextCellValue).value.text, 'Kabir');
-      expect((row[4]!.value as TextCellValue).value.text, 'HEX');
-      expect(asNumber(row[6]!.value), 60);
-      expect(asNumber(row[7]!.value), 150.0);
-      expect(asNumber(row[8]!.value), 100.0);
-      expect((row[10]!.value as TextCellValue).value.text, 'Partial');
     });
   });
 }

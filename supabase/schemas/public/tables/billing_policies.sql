@@ -1,7 +1,7 @@
 -- billing_policies — the arena's configurable billing rules
 --
 -- One knob per column (rounding, grace, minimum charge, early exit, payment
--- timing, group billing …); defaults are the documented assumptions in
+-- timing …); defaults are the documented assumptions in
 -- docs/OWNER_CONFIRMATION.md. The server uses the oldest active row
 -- (order by created_at) and falls back to _pr_policy defaults when none exists.
 -- Written by op_policy_save (policy.save), which updates that row or creates
@@ -25,7 +25,6 @@ create table "public"."billing_policies" (
   "payment_timing"          text                     not null default 'either'::text,
   "allow_extend_past_close" boolean                  not null default false,
   "cleaning_gap_minutes"    integer                  not null default 0,
-  "group_billing_mode"      text                     not null default 'per_system'::text,
   "created_at"              timestamp with time zone not null default now(),
   "updated_at"              timestamp with time zone not null default now(),
   "sync_xid"                xid8                     not null default pg_current_xact_id(),
@@ -39,8 +38,6 @@ create table "public"."billing_policies" (
     check ((block_rounding = ANY (ARRAY['up'::text, 'nearest'::text]))),
   constraint "billing_policies_early_exit_check"
     check ((early_exit = ANY (ARRAY['actual'::text, 'planned'::text]))),
-  constraint "billing_policies_group_billing_mode_check"
-    check ((group_billing_mode = ANY (ARRAY['per_system'::text, 'shared_controller_pool'::text]))),
   constraint "billing_policies_late_arrival_check"
     check ((late_arrival = ANY (ARRAY['actual'::text, 'planned'::text]))),
   constraint "billing_policies_money_rounding_dir_check"
@@ -85,8 +82,6 @@ comment on column public.billing_policies.payment_timing is 'When payment may be
 comment on column public.billing_policies.allow_extend_past_close is 'When false an extension stops at closing time (applied by the app''s session planner).';
 
 comment on column public.billing_policies.cleaning_gap_minutes is 'Minutes a resource is held free after a session ends. Stored setting; not enforced server-side.';
-
-comment on column public.billing_policies.group_billing_mode is 'per_system (each system billed at its own controller count) or shared_controller_pool (the group''s purchased controller count priced once over the group window).';
 
 comment on column public.billing_policies.sync_xid is 'Id of the transaction that last wrote the row (set by trigger sync_stamp); change-feed cursor for sync_pull.';
 

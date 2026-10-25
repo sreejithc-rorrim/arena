@@ -3,13 +3,13 @@
 --
 -- Permission: settings.
 -- Payload: id, status ('available' | 'maintenance' | 'temporarily_unavailable' | 'disabled').
--- A station someone is on (an open session segment or group player) can only be made available:
+-- A station someone is on (an open session segment) can only be made available:
 -- taking it away would strand a live session (resource_busy), the rule both apps apply before
 -- sending. The station row is locked first (_lock_resources, as a start does), so a start racing
 -- this either commits first and this is refused, or waits and then finds the station out of
 -- service (resource_unavailable).
--- Checks / errors: forbidden; not_found (hint resource); resource_busy (hint: open session or
---   group player); invalid (status outside resources_status_check).
+-- Checks / errors: forbidden; not_found (hint resource); resource_busy (hint: open session);
+--   invalid (status outside resources_status_check).
 -- Writes: resources.status. Returns: {}.
 -- Server-only: not executable by anon/authenticated; reached through sync_push.
 create or replace function public.op_resource_set_status (
@@ -35,10 +35,6 @@ begin
                 where arena_id = p_arena and resource_id = v_id and ended_at is null) then
       raise exception 'resource_busy' using hint = 'open session';
     end if;
-    if exists (select 1 from group_assignments
-                where arena_id = p_arena and resource_id = v_id and ended_at is null) then
-      raise exception 'resource_busy' using hint = 'group player';
-    end if;
   end if;
   update resources set status = v_status, updated_at = statement_timestamp()
     where id = v_id and arena_id = p_arena;
@@ -47,7 +43,7 @@ end;
 $function$;
 
 comment on function public.op_resource_set_status(uuid, jsonb) is
-  'Sync op resource.set_status: puts a station in or out of service or removes it; refuses anything but available while a session or group player is on it (resource_busy).';
+  'Sync op resource.set_status: puts a station in or out of service or removes it; refuses anything but available while a session is on it (resource_busy).';
 
 grant execute
   on function "public"."op_resource_set_status"(uuid, jsonb)

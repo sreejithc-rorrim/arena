@@ -1,5 +1,5 @@
 /// The signed-in staff member's own details and the arena's staff terms.
-/// Online only, like attendance and leave.
+/// Online only.
 library;
 
 import 'package:arena_ops/core/result/result.dart';
