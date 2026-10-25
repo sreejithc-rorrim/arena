@@ -79,6 +79,7 @@ class CheckInPlan {
     this.gameName,
     this.gameMaxLocalPlayers,
     this.alternatives = false,
+    this.choices = const [],
   });
 
   final Resource resource;
@@ -92,6 +93,11 @@ class CheckInPlan {
 
   /// True for an any-system booking: the station was chosen now.
   final bool alternatives;
+
+  /// Every station an any-system booking could start at right now, [resource]
+  /// among them (staff may pick another); empty for a booking for a named
+  /// station.
+  final List<Resource> choices;
 }
 
 class BookingActions {
@@ -299,7 +305,8 @@ class BookingActions {
 
   /// Where and how a booked customer would be seated right now: the station
   /// (the booked one, or the best free compatible one for an any-system
-  /// booking), the session end, and the controllers the booking asked for.
+  /// booking, with the other free ones staff may pick instead), the session
+  /// end, and the controllers the booking asked for.
   /// Nothing is written — the check-in sheet shows this, lets staff pick the
   /// physical pads, then calls [checkIn].
   Future<Result<CheckInPlan>> planCheckIn(
@@ -341,6 +348,32 @@ class BookingActions {
       playersRequired: booking.playersRequired,
     );
 
+    // The session starts now, so a station whose session is still running is
+    // busy even past that session's booked end (overtime), which the
+    // occupancies above do not cover; one set to another mode would be
+    // refused at start.
+    final running = {
+      for (final a in await sessions.active()) a.current.resourceId,
+    };
+    bool startableNow(Resource r) =>
+        !running.contains(r.id) &&
+        (r.currentMode == null || r.currentMode == booking.activityCode);
+
+    final choices = booking.resourceId != null
+        ? const <Resource>[]
+        : [
+            for (final r in availability.availableSystems(
+              window: window,
+              resources: resources,
+              occupancies: occ,
+              requireActivityCode: booking.activityCode,
+              compatibility: compat,
+              gameMaxLocalPlayers: game?.maxLocalPlayers,
+              playersRequired: booking.playersRequired,
+            ))
+              if (startableNow(r)) r,
+          ];
+
     Resource resolved;
     final fixedId = booking.resourceId ?? preferResourceId;
     if (fixedId != null) {
@@ -350,20 +383,24 @@ class BookingActions {
           Failure(message: 'Unknown system.', code: 'no_resource'),
         );
       }
-      final check = fits(matches.first);
+      final station = matches.first;
+      if (running.contains(station.id)) {
+        return Err(
+          Failure(
+            message: '${station.name} is still in use.',
+            fix: booking.resourceId != null
+                ? 'End the session there first, or edit the booking to '
+                      'another station.'
+                : 'Pick another station.',
+            code: 'resource_busy',
+          ),
+        );
+      }
+      final check = fits(station);
       if (check.isErr) return Err(check.failureOrNull!);
-      resolved = matches.first;
+      resolved = station;
     } else {
-      final avail = availability.availableSystems(
-        window: window,
-        resources: resources,
-        occupancies: occ,
-        requireActivityCode: booking.activityCode,
-        compatibility: compat,
-        gameMaxLocalPlayers: game?.maxLocalPlayers,
-        playersRequired: booking.playersRequired,
-      );
-      if (avail.isEmpty) {
+      if (choices.isEmpty) {
         return const Err(
           Failure(
             message: 'No compatible system is free right now.',
@@ -372,11 +409,11 @@ class BookingActions {
           ),
         );
       }
-      resolved = avail.first;
+      resolved = choices.first;
       // Prefer a system that already has the booked controllers free, so the
       // party is not sent where pads would have to be borrowed.
       if (usesControllers && wanted != null && boards != null) {
-        for (final r in avail) {
+        for (final r in choices) {
           final b = await boards!.load(resourceId: r.id, resourceName: r.name);
           if (!b.tracked || b.inventory.freeHere >= wanted) {
             resolved = r;
@@ -394,6 +431,7 @@ class BookingActions {
         gameName: game?.name,
         gameMaxLocalPlayers: game?.maxLocalPlayers,
         alternatives: booking.resourceId == null,
+        choices: choices,
       ),
     );
   }

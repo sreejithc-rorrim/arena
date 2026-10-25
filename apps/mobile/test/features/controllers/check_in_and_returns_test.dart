@@ -131,6 +131,72 @@ void main() {
     await disposeApp(tester);
   });
 
+  testWidgets('check-in: an any-system booking skips a station in overtime '
+      'and staff can pick another free one (#20)', (tester) async {
+    phone(tester);
+    final clock = FakeClock(ist(2026, 10, 2, 14, 0));
+    final walkIn = await LocalCustomerRepository(db).create(name: 'Walk-in');
+    // Booked 14:00–15:00 and never ended: HEX is in overtime at 19:02.
+    final overtime = await LocalSessionRepository(db, clock).start(
+      StartSessionCommand(
+        customerId: walkIn.id,
+        startedAt: clock.now(),
+        scheduledEndAt: clock.now().add(const Duration(hours: 1)),
+        snapshot: await LocalCatalogRepository(db).currentSnapshot(),
+        resourceId: 'hex',
+        resourceName: 'HEX',
+        activityCode: 'PS5',
+        controllerCount: 2,
+      ),
+    );
+    expect(overtime.isOk, isTrue, reason: overtime.failureOrNull?.display);
+    final who = await LocalCustomerRepository(db).create(name: 'Rahul');
+    final booking = (await BookingActions(
+      bookings: LocalBookingRepository(db, clock),
+      sessions: LocalSessionRepository(db, clock),
+      catalog: LocalCatalogRepository(db),
+      clock: clock,
+      guard: const PermissionGuard(AppUser(
+        id: 'u2',
+        name: 'Staff',
+        perms: {Permission.start},
+      )),
+    ).createBooking(BookingDraft(
+      customerId: who.id,
+      activityCode: 'PS5',
+      date: fridayDate,
+      startMinuteOfDay: 19 * 60,
+      durationMinutes: 60,
+      gameId: 'g_eafc',
+      controllerRequirement: 2,
+    )))
+        .valueOrNull!;
+
+    await tester.pumpWidget(opener((c) => showCheckInSheet(c, booking)));
+    await tester.tap(find.text('open'));
+    await settle(tester);
+
+    String station() =>
+        tester.widget<Text>(find.byKey(const ValueKey('check-in-station'))).data!;
+    expect(station(), 'VOID · free compatible system · booked for 2 controllers');
+    expect(find.byKey(const ValueKey('check-in-station-hex')), findsNothing);
+    expect(find.byKey(const ValueKey('check-in-station-void')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('check-in-station-rift')));
+    await settle(tester);
+    expect(station(), 'RIFT · free compatible system · booked for 2 controllers');
+    expect(
+        tester.widget<Text>(find.byKey(const ValueKey('pad-selected'))).data,
+        'Selected: RIFT-1, RIFT-2');
+
+    await tester.tap(find.byKey(const ValueKey('check-in-confirm')));
+    await settle(tester);
+    expect(await held(), containsAll(['ctl_rift_1', 'ctl_rift_2']));
+    final b = await LocalBookingRepository(db).getById(booking.id);
+    expect(b!.status, BookingStatus.checkedIn);
+    await disposeApp(tester);
+  });
+
   testWidgets('end sheet: tick a borrowed pad and it is returned home once '
       'the session ends', (tester) async {
     phone(tester);

@@ -17,6 +17,7 @@ import 'package:arena_ops/domain/auth/permission.dart';
 import 'package:arena_ops/domain/auth/permission_guard.dart';
 import 'package:arena_ops/domain/entities/booking.dart';
 import 'package:arena_ops/domain/entities/controller.dart';
+import 'package:arena_ops/domain/repositories/commands.dart';
 import 'package:arena_ops/domain/services/pad_selection.dart';
 import 'package:arena_ops/domain/value/enums.dart';
 import 'package:drift/native.dart';
@@ -87,6 +88,28 @@ void main() {
     expect(r.isOk, isTrue, reason: r.failureOrNull?.display);
     clock.set(ist(2026, 10, 2, 19, 2)); // the party arrives
     return r.valueOrNull!;
+  }
+
+  /// A walk-in at [resourceId] booked for 14:00–15:00 and never ended, so it
+  /// is in overtime once the party arrives at 19:02.
+  Future<void> overtimeWalkIn(String resourceId) async {
+    final who = await LocalCustomerRepository(db, clock).create(name: 'Walk-in');
+    final s = await sessionsRepo.start(StartSessionCommand(
+      customerId: who.id,
+      startedAt: clock.now(),
+      scheduledEndAt: clock.now().add(const Duration(hours: 1)),
+      snapshot: await catalog.currentSnapshot(),
+      resourceId: resourceId,
+      resourceName: resourceId.toUpperCase(),
+      activityCode: 'PS5',
+      controllerCount: 2,
+    ));
+    expect(s.isOk, isTrue, reason: s.failureOrNull?.display);
+  }
+
+  Future<ControllerChoice> twoPadsAt(String resourceId) async {
+    final board = await boards.load(resourceId: resourceId);
+    return ControllerChoice.tracked(requested: 2).reconcile(board);
   }
 
   group('booking check-in', () {
@@ -162,6 +185,61 @@ void main() {
           reason: 'nothing written on a refused check-in');
       expect(await sessionsRepo.active(), isEmpty);
       expect(await held(), isEmpty);
+    });
+
+    test('an any-system check-in skips a station running overtime (#20)',
+        () async {
+      await overtimeWalkIn('hex');
+      // No controller count: nothing else steers the pick away from HEX.
+      final b = await book(controllers: null);
+      final plan = (await bookings.planCheckIn(b)).valueOrNull!;
+      expect(plan.resource.id, 'void');
+      // GHOST cannot run EA FC (seed).
+      expect([for (final r in plan.choices) r.id], ['void', 'rift']);
+
+      final s = await bookings.checkIn(b,
+          controllers: await twoPadsAt('void'), resourceId: plan.resource.id);
+      expect(s.isOk, isTrue, reason: s.failureOrNull?.display);
+      expect((await bookingsRepo.getById(b.id))!.status, BookingStatus.checkedIn);
+    });
+
+    test('a booking for a station running overtime is refused clearly (#20)',
+        () async {
+      await overtimeWalkIn('void');
+      final b = await book(resourceId: 'void');
+      final plan = await bookings.planCheckIn(b);
+      expect(plan.failureOrNull?.code, 'resource_busy');
+      expect(plan.failureOrNull?.message, 'VOID is still in use.');
+      expect(plan.failureOrNull?.fix,
+          'End the session there first, or edit the booking to another '
+          'station.');
+      final r = await bookings.checkIn(b, controllers: await twoPadsAt('void'));
+      expect(r.failureOrNull?.code, 'resource_busy');
+      expect((await bookingsRepo.getById(b.id))!.status, BookingStatus.booked);
+    });
+
+    test('staff can start an any-system booking at another free station, '
+        'never at a busy one (#20)', () async {
+      await overtimeWalkIn('void');
+      final b = await book();
+      final plan = (await bookings.planCheckIn(b)).valueOrNull!;
+      expect(plan.resource.id, 'hex');
+      expect([for (final r in plan.choices) r.id], ['hex', 'rift']);
+
+      final busy = await bookings.checkIn(b,
+          controllers: await twoPadsAt('void'), resourceId: 'void');
+      expect(busy.failureOrNull?.message, 'VOID is still in use.');
+      expect(busy.failureOrNull?.fix, 'Pick another station.');
+
+      final s = await bookings.checkIn(b,
+          controllers: await twoPadsAt('rift'), resourceId: 'rift');
+      expect(s.isOk, isTrue, reason: s.failureOrNull?.display);
+      expect(s.valueOrNull!.bookingId, b.id);
+      final atRift = [
+        for (final a in await sessionsRepo.active())
+          if (a.current.resourceId == 'rift') a,
+      ];
+      expect(atRift, hasLength(1));
     });
 
     test('an activity without controllers checks in without pads', () async {
