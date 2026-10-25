@@ -47,6 +47,12 @@ together.
   ARQ logo instead of the old "404" badge (#24).
 - Admin Pricing › rule "When": the From and To time fields are the same size; the "00:00 is
   midnight" hint no longer wraps or stretches the From field (#25).
+- Floor app booking check-in runs the same price check as New Session: a controller count with
+  no price is refused ("No price for PS5 with 3 controllers.") instead of starting a session the
+  server rejects (`no_rate`). The no-price tip now points to the dashboard's Pricing (#30).
+- Floor app End sheet: bill lines show their exact amounts (₹37.50, as in Sales) and cash rounding
+  gets its own "Rounding" line, so the lines add up to the total. Amounts charged are unchanged
+  (#22).
 
 ## [0.0.1-alpha.1] - 2026-10-24
 

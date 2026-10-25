@@ -22,6 +22,7 @@ import 'package:arena_ops/domain/auth/permission_guard.dart';
 import 'package:arena_ops/domain/entities/booking.dart';
 import 'package:arena_ops/domain/entities/resource.dart';
 import 'package:arena_ops/domain/entities/session.dart';
+import 'package:arena_ops/domain/pricing/pricing_service.dart';
 import 'package:arena_ops/domain/repositories/booking_repository.dart';
 import 'package:arena_ops/domain/repositories/catalog_repository.dart';
 import 'package:arena_ops/domain/repositories/commands.dart';
@@ -105,6 +106,7 @@ class BookingActions {
     this.availability = const BookingAvailabilityService(),
     this.boards,
     this.padSelection = const PadSelection(),
+    this.pricing = const PricingService(),
   });
 
   final BookingRepository bookings;
@@ -131,6 +133,10 @@ class BookingActions {
   /// controllers than are free at the station).
   final PadBoardLoader? boards;
   final PadSelection padSelection;
+
+  /// The price check New Session runs (SessionPlanner.planStart): check-in
+  /// refuses what the price list cannot bill, as the server would (`no_rate`).
+  final PricingService pricing;
 
   /// Active-session + existing-booking occupancy over [window]. Unassigned
   /// (any-system) bookings do not block a specific resource until check-in.
@@ -429,6 +435,16 @@ class BookingActions {
     }
 
     final snapshot = await catalog.currentSnapshot();
+    // Priced like a walk-in start, for the chosen controller count: without a
+    // rate the session would bill ₹0 and the server refuses it.
+    final priced = pricing.quote(
+      snapshot: snapshot,
+      activityCode: booking.activityCode,
+      controllerCount: plan.usesControllers ? choice.count : null,
+      start: now,
+      end: plan.scheduledEnd,
+    );
+    if (priced.isErr) return Err(priced.failureOrNull!);
     final started = await sessions.start(
       StartSessionCommand(
         customerId: booking.customerId!,
