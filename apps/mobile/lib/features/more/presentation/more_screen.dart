@@ -207,8 +207,8 @@ class MoreScreen extends ConsumerWidget {
                   const SizedBox(height: 2),
                   Text(
                       cloud == null
-                          ? 'Version 0.0.1-alpha.1 · Local-first'
-                          : 'Version 0.0.1-alpha.1 · Cloud · ${cloud.arenaName}',
+                          ? 'Version 0.0.1-alpha.3 · Local-first'
+                          : 'Version 0.0.1-alpha.3 · Cloud · ${cloud.arenaName}',
                       style: ArenaType.caption.copyWith(color: arena.textMuted)),
                 ],
               ),

@@ -10,6 +10,8 @@ together.
 
 ## [Unreleased]
 
+## [0.0.1-alpha.3] - 2026-10-25
+
 ### Added
 - Admin Overview: a "Day" period shows any past day (yesterday by default, picked with a date
   field; `?period=day&day=YYYY-MM-DD`) with takings by hour, compared with the day before.
@@ -225,6 +227,7 @@ takings yet.
 - Admin initial bundle exceeds its 500 kB budget.
 - Not built yet: push notifications, who's-in board, shared clock-in tablet.
 
-[Unreleased]: https://github.com/rorrimlabs/arc-arena/compare/v0.0.1-alpha.1...HEAD
+[Unreleased]: https://github.com/rorrimlabs/arc-arena/compare/v0.0.1-alpha.3...HEAD
+[0.0.1-alpha.3]: https://github.com/rorrimlabs/arc-arena/compare/v0.0.1-alpha.1...v0.0.1-alpha.3
 [0.0.1-alpha.1]: https://github.com/rorrimlabs/arc-arena/compare/v0.0.1-alpha.0...v0.0.1-alpha.1
 [0.0.1-alpha.0]: https://github.com/rorrimlabs/arc-arena/releases/tag/v0.0.1-alpha.0
