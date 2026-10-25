@@ -9,7 +9,7 @@
 --    customer, guest, returning, stations[], activities[], games[], players,
 --    player_minutes, billed_paise, paid_paise, refunded_paise,
 --    methods{method: net paise}, payments[], started_by, void_reason,
---    voided_at, voided_by, discount_paise, discount}
+--    voided_at, voided_by, discount_paise, discount, quoted_paise}
 -- stations/activities/games are names in play order; recorded_at is when the
 -- server received the start (the device stamps started_at; see sessions);
 -- returning is true when the customer (never a walk-in guest) has an earlier
@@ -25,7 +25,9 @@
 -- started_by / voided_by / by are staff names; voided_at / voided_by come from
 -- the first void in the audit log; discount is the bill_discounts row {source,
 -- name, code, discount_id, value_kind, value, base_paise, amount_paise, reason,
--- by} or null, discount_paise its amount (0 without one). Unordered. Shared body of arena_sales and
+-- by} or null, discount_paise its amount (0 without one); quoted_paise is a missed bill's price on
+-- the price list of the day it was added (its session.record audit entry; the bill is the amount
+-- actually paid), null for every other bill and for missed bills added before it was kept. Unordered. Shared body of arena_sales and
 -- arena_sale, which check the caller. Server-only: not executable by
 -- anon/authenticated.
 create or replace function public._sales (
@@ -54,7 +56,7 @@ create or replace function public._sales (
       'refunded_paise', pay.refunded, 'methods', pay.methods, 'payments', pay.ledger,
       'started_by', sp.name, 'void_reason', s.void_reason,
       'voided_at', vd.at, 'voided_by', vd.by,
-      'discount_paise', coalesce(dsc.amount, 0), 'discount', dsc.j)
+      'discount_paise', coalesce(dsc.amount, 0), 'discount', dsc.j, 'quoted_paise', rec.quoted)
     from sessions s
     cross join lateral (select coalesce(s.actual_ended_at, s.updated_at) as at) b
     join customers c on c.id = s.customer_id
@@ -121,6 +123,13 @@ create or replace function public._sales (
         left join staff_profiles sd on sd.arena_id = d.arena_id and sd.user_id = d.applied_by
        where d.session_id = s.id
     ) dsc on true
+    left join lateral (
+      select (l.after->>'quoted_paise')::bigint as quoted
+        from audit_log l
+       where l.arena_id = s.arena_id and l.entity_type = 'session' and l.entity_id = s.id
+         and l.action = 'record'
+       order by l.created_at limit 1
+    ) rec on true
    where s.arena_id = p_arena and s.status <> 'active'
      and (case when p_id is null then b.at >= p_from and b.at < p_to else s.id = p_id end);
 $function$;

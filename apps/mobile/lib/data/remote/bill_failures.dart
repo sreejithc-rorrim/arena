@@ -40,7 +40,7 @@ abstract final class BillFailures {
     ),
     'invalid_total' => const Failure(
       message: 'That amount does not work.',
-      fix: 'Enter the new total in rupees, 0 or more.',
+      fix: 'Enter the amount in rupees, 0 or more.',
       code: 'invalid_total',
     ),
     'invalid_method' => const Failure(
