@@ -7,9 +7,7 @@
 }
 
 @if (navShown()) {
-  <!-- Escape bubbles up from the focused links inside the trap; the aside itself never takes focus. -->
-  <!-- eslint-disable-next-line @angular-eslint/template/interactive-supports-focus -->
-  <!-- Compact: the More sheet over the quick links bar; wider: the side nav. -->
+  <!-- Compact: the More sheet over the quick links bar (Escape closes it: Shell); wider: the side nav. -->
   <aside
     id="app-nav"
     class="z-50 flex flex-none flex-col bg-surface-sunken px-3"
@@ -26,12 +24,12 @@
     [class.rounded-t-dialog]="layout.compact()"
     [class.shadow-raised]="layout.compact()"
     [class.animate-sheet]="layout.compact()"
+    [class.pb-3]="layout.compact()"
     [attr.role]="layout.compact() ? 'dialog' : null"
     [attr.aria-modal]="layout.compact() ? 'true' : null"
     [attr.aria-label]="layout.compact() ? 'More' : 'Navigation'"
     [cdkTrapFocus]="layout.compact()"
     [cdkTrapFocusAutoCapture]="layout.compact()"
-    (keydown.escape)="layout.closeNav()"
   >
     <!-- Brand -->
     <div
@@ -230,7 +228,7 @@
 @if (layout.compact()) {
   <!-- Quick links; everything else (and the arena switcher, sign-out) is under More. -->
   <nav
-    class="fixed inset-x-0 bottom-0 z-30 flex h-bottom-bar border-t border-border bg-surface-sunken"
+    class="fixed inset-x-0 bottom-0 z-30 flex h-[var(--app-bottom-bar)] border-t border-border bg-surface-sunken px-3 pb-[max(12px,env(safe-area-inset-bottom))]"
     aria-label="Quick links"
   >
     @for (item of quickLinks(); track item.path) {

@@ -31,8 +31,11 @@ import { NAV_GROUPS } from './nav';
   templateUrl: './shell.html',
   host: {
     class: 'flex h-dvh overflow-hidden bg-bg text-fg',
-    // Panes (h-app) end above the compact quick links bar.
-    '[style.--app-bottom-bar]': "layout.compact() ? 'var(--spacing-bottom-bar)' : null",
+    // Panes (h-app) end above the compact quick links bar: its row plus a bottom margin clear of
+    // curved screen corners and the home indicator (the safe-area inset when the device has one).
+    '(document:keydown.escape)': 'closeNavOnEscape($event)',
+    '[style.--app-bottom-bar]':
+      "layout.compact() ? 'calc(var(--spacing-bottom-bar) + max(12px, env(safe-area-inset-bottom)))' : null",
   },
 })
 export class Shell {
@@ -94,6 +97,15 @@ export class Shell {
       .join('')
       .toUpperCase(),
   );
+
+  /**
+   * Escape closes the More sheet. Listened for on the document, not on the sheet, which never
+   * takes focus itself; an Escape something else already handled (the arena menu closing) is left
+   * to it.
+   */
+  protected closeNavOnEscape(event: Event): void {
+    if (this.layout.navOpen() && !event.defaultPrevented) this.layout.closeNav();
+  }
 
   constructor() {
     // The selected arena's capabilities and noun, for the nav and every screen.

@@ -12,6 +12,6 @@
 /* Compact: toasts sit above the quick links bar (core/layout/shell), not over it. */
 @media (max-width: 899.98px) {
   .mat-mdc-snack-bar-container {
-    margin-bottom: calc(var(--spacing-bottom-bar) + 8px);
+    margin-bottom: calc(var(--spacing-bottom-bar) + max(12px, env(safe-area-inset-bottom)) + 8px);
   }
 }
