@@ -77,6 +77,14 @@ begin
       when 'staff_details.save'   then op_staff_details_save(p_arena, p)
       when 'terms.publish'        then op_terms_publish(p_arena, p)
       when 'terms.accept'         then op_terms_accept(p_arena, p)
+      when 'expense_category.upsert' then op_expense_category_upsert(p_arena, p)
+      when 'expense_category.remove' then op_expense_category_remove(p_arena, p)
+      when 'expense.add'             then op_expense_add(p_arena, p)
+      when 'expense.update'          then op_expense_update(p_arena, p)
+      when 'expense.pay'             then op_expense_pay(p_arena, p)
+      when 'expense.payment_reverse' then op_expense_payment_reverse(p_arena, p)
+      when 'expense.void'            then op_expense_void(p_arena, p)
+      when 'staff_salary.set'        then op_staff_salary_set(p_arena, p)
       else null
     end;
 

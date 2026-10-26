@@ -10,10 +10,13 @@
 --   op_bill_adjust (action bill_adjust, the required reason, before {billed_paise, paid_paise},
 --     after {billed_paise, paid_paise});
 --   op_customer_create (entity customer, action duplicate_phone_on_sync, when a
---     phone already belongs to another customer and the new row is kept without it).
+--     phone already belongs to another customer and the new row is kept without it);
+--   the expense ops (entity expense: add, update, payment_reverse, void) and
+--     op_staff_salary_set (entity staff_salary: set, update), with the changed fields.
 -- Refunds are not repeated here: each is its own append-only payments row with a
 -- reason and who recorded it. Only owner-level members (money / reports) can read
--- it; it has no sync_xid, so it is not part of the sync_pull change feed.
+-- it, and expense / staff_salary rows (amounts, salaries, notes) only money holders;
+-- it has no sync_xid, so it is not part of the sync_pull change feed.
 create table "public"."audit_log" (
   "id"          uuid                     not null default gen_random_uuid(),
   "arena_id"    uuid                     not null,
@@ -64,11 +67,14 @@ create index ix_audit_entity on public.audit_log using btree (arena_id, entity_t
 create index ix_audit_log_created_by on public.audit_log using btree (created_by);
 
 -- Readable by an active member holding owner level (money/reports) only: voids and sync adjustments are an owner's record.
+-- Expense and salary rows need money, like the expense tables themselves.
 -- No write policy: clients change data only through sync_push.
 create policy "p_sel_audit_log" on "public"."audit_log"
   for select
   to authenticated
-  using ((arena_id in ( select private.app_arena_ids_with(ARRAY['money'::text, 'reports'::text]) as app_arena_ids_with)));
+  using (((arena_id in ( select private.app_arena_ids_with(ARRAY['money'::text, 'reports'::text]) as app_arena_ids_with))
+    and ((entity_type <> ALL (ARRAY['expense'::text, 'staff_salary'::text]))
+      or (arena_id in ( select private.app_arena_ids_with(ARRAY['money'::text]) as app_arena_ids_with)))));
 
 grant delete, insert, maintain, references, select, trigger, truncate, update
   on table "public"."audit_log"

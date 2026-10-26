@@ -86,15 +86,33 @@ are answered.
 | S13 | PDF export | 🟡 print-styled page, saved as PDF from the browser | a generated PDF file | Admin › Payroll |
 | S14 | Forgotten clock-out | 🟡 auto-out at the scheduled end, paid, flagged for review | unpaid until reviewed | `_att_close_stale` |
 | S15 | Who is tracked | 🟡 staff yes, owner no (per-person switch) | everyone | `staff_hr_profiles.tracks_attendance` |
-| S16 | Record the payout itself | 🟡 out of scope | "mark paid" with date and method | later phase |
+| S16 | Record the payout itself | 🟡 out of scope (superseded 2026-10-26: salaries are recorded and paid in Admin › Expenses, E2) | "mark paid" with date and method | later phase |
 | S17 | One person at two arenas | 🟡 separate profile, pay and leave per arena | combined payslip | per-arena tables |
 | S18 | Kiosk PIN | 🟡 4 digits; 5 wrong tries lock it for 15 minutes | other length / lockout | `settings.attendance.kiosk` |
 | S19 | Changes inside a finalised period | 🟡 refused; an adjustment goes in the next run | reopen the run | `period_finalised` check |
-| S20 | Salary advance recovery | 🟡 one deduction in the chosen run | instalments | `salary_adjustments` |
+| S20 | Salary advance recovery | 🟡 one deduction in the chosen run (superseded 2026-10-26 for payouts: an advance is an early payment against the period, E2) | instalments | `salary_adjustments` |
 | S21 | Rounding applied to | 🟡 the day's total, after the break | each entry | `_att_day_facts` |
 | S22 | Push for approvers who only use admin web | 🟡 phones only at first | browser push | later phase |
 | S23 | Salary reductions | ✅ decided 2026-10-15: at the end of the period the owner gets a timesheet and decides, per person and per deduction (absent, LOP, half-day, late), whether to reduce pay. The system only suggests; suggestions start as applied | — | `salary_deduction_decisions`, `salary_run.set_deduction` |
 | S24 | Salary in the staff app | ✅ decided 2026-10-15: none. No rates, salary or payslips on the floor app; pay lives on admin web for `payroll` holders only | — | RLS on `staff_pay_rates`, `salary_run_lines` |
+
+## Expenses and salaries (admin web, added 2026-10-26)
+
+Running costs and staff salaries the owner records and pays, kept apart from customer bills,
+session payments, sales and pricing. Nothing is generated or paid automatically.
+
+| # | Rule | Default (assumption) | Alternatives | Where |
+|---|------|----------------------|--------------|-------|
+| E1 | Who sees and changes expenses and salaries | ✅ decided 2026-10-26: `money` holders (the owner always); nobody else sees any of it | a separate permission | `_need(arena, 'money')`, RLS `app_arena_ids_with(['money'])` |
+| E2 | Salary model | ✅ decided 2026-10-26: an agreed salary (monthly or weekly, from a day) plus the periods the owner records; the agreed amount fills in and can be changed; a period is paid in one or more payments, and one made before the period ends is an advance | generated pay runs | `staff_salaries`, `expenses.kind = 'salary'` |
+| E3 | What the totals count by | ✅ decided 2026-10-26: incurred, paid and unpaid by expense date (a salary: its period's last day); company, personal and salaries paid by payment date | payment date only | `arena_expenses` |
+| E4 | Funding source | ✅ decided 2026-10-26: every payment is from the company account or an owner's own money, and one expense may mix both; personal money is never counted as company cash out | — | `expense_payments.paid_from`, `payer_staff_id` |
+| E5 | Who can pay personally | ✅ decided 2026-10-26: active owners of the arena only | any staff member (relax the op check; no migration) | `_expense_pay` |
+| E6 | Paying owners back | 🟡 out of v1: personal payments are shown as owner contributions, not as money owed to them | track repayments | later phase |
+| E7 | Receipts | ✅ decided 2026-10-26: none in v1 | photo or PDF attachments | later phase |
+| E8 | Corrections | 🟡 an expense can be edited (before/after in the audit log; never below what is paid); payments are never edited, only reversed with a reason, keeping their source, payer, method and day; a void needs a reason and reverses its payments only when the owner ticks it | void and re-add only | `op_expense_update`, `op_expense_payment_reverse`, `op_expense_void` |
+| E9 | Payment methods | 🟡 cash, UPI, card, bank, other | per-arena list | `expense_payments.method` |
+| E10 | Your own salary | 🟡 owner only (as S7): a non-owner `money` holder cannot record, pay or change their own salary or expenses | anyone holding `money` | `_expense_staff_check` |
 
 ## Fixed facts from the spec (not assumptions)
 

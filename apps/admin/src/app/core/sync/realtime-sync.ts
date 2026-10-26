@@ -5,6 +5,7 @@ import { ArenaContext } from '../arena/arena-context';
 import { Session } from '../auth/session';
 import { FloorRead, FloorStore } from '../floor/floor-store';
 import { AccessoriesStore } from '../../features/accessories/data/accessories-store';
+import { ExpensesStore } from '../../features/expenses/data/expenses-store';
 import { FloorOptionsStore } from '../../features/settings/data/floor-options';
 import { OverviewStore } from '../../features/overview/data/overview-store';
 import { PricingStore } from '../../features/pricing/data/pricing-store';
@@ -28,6 +29,7 @@ export type RefreshTarget =
   | 'settings'
   | 'users'
   | 'accessories'
+  | 'expenses'
   | 'arena';
 
 /** How long a burst of events is gathered before one refresh. */
@@ -90,6 +92,7 @@ const ALL_TARGETS: readonly RefreshTarget[] = [
   'settings',
   'users',
   'accessories',
+  'expenses',
   'arena',
 ];
 
@@ -115,6 +118,10 @@ const KIND_TARGETS: readonly (readonly [string, readonly RefreshTarget[]])[] = [
   ['accessory_kind.', ['accessories']],
   ['rule.', PRICES],
   ['discount.', PRICES],
+  // Expenses, their categories and agreed salaries: only the dashboard shows them.
+  ['expense.', ['expenses']],
+  ['expense_category.', ['expenses']],
+  ['staff_salary.', ['expenses']],
   // Floor-only records the dashboard does not show.
   ['booking.', []],
   // Personal details and terms: their tabs read them afresh each time they open.
@@ -149,6 +156,7 @@ export class RealtimeSync {
   private readonly pricing = inject(PricingStore);
   private readonly floorOptions = inject(FloorOptionsStore);
   private readonly accessories = inject(AccessoriesStore);
+  private readonly expenses = inject(ExpensesStore);
   private readonly users = inject(UsersStore);
   private readonly team = inject(TeamStore);
   private readonly venue = inject(VenueStore);
@@ -398,6 +406,10 @@ export class RealtimeSync {
     if (targets.has('accessories')) {
       if (on('stations', 'settings')) jobs.push(this.accessories.refresh());
       else this.accessories.stale();
+    }
+    if (targets.has('expenses')) {
+      if (on('expenses')) jobs.push(this.expenses.refresh());
+      else this.expenses.stale();
     }
     // Station types and the venue profile decide the nav on every screen: always read again.
     if (targets.has('pricing') || targets.has('settings')) jobs.push(this.venue.refresh());

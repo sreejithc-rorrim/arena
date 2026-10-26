@@ -11,6 +11,7 @@ import { MATERIAL_DEFAULTS } from './shared/material/material-defaults';
 const BUILT: Readonly<Record<string, () => Promise<Routes>>> = {
   overview: () => import('./features/overview/overview.routes').then((m) => m.OVERVIEW_ROUTES),
   sales: () => import('./features/sales/sales.routes').then((m) => m.SALES_ROUTES),
+  expenses: () => import('./features/expenses/expenses.routes').then((m) => m.EXPENSES_ROUTES),
   pricing: () => import('./features/pricing/pricing.routes').then((m) => m.PRICING_ROUTES),
   stations: () => import('./features/stations/stations.routes').then((m) => m.STATIONS_ROUTES),
   members: () => import('./features/members/members.routes').then((m) => m.MEMBERS_ROUTES),

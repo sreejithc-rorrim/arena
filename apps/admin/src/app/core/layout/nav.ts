@@ -34,6 +34,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     items: [
       { path: 'overview', label: 'Overview', icon: 'dashboard', quick: true },
       { path: 'sales', label: 'Sales', icon: 'receipt_long', quick: true },
+      { path: 'expenses', label: 'Expenses', icon: 'account_balance_wallet', perm: 'money' },
     ],
   },
   {

@@ -8,6 +8,7 @@ import { Session } from '../auth/session';
 import { Router } from '@angular/router';
 import { FloorStore } from '../floor/floor-store';
 import { AccessoriesStore } from '../../features/accessories/data/accessories-store';
+import { ExpensesStore } from '../../features/expenses/data/expenses-store';
 import { FloorOptionsStore } from '../../features/settings/data/floor-options';
 import { OverviewStore } from '../../features/overview/data/overview-store';
 import { PricingStore } from '../../features/pricing/data/pricing-store';
@@ -30,6 +31,7 @@ describe('RealtimeSync', () => {
   let mockFloorOptions: { refresh: Mock; stale: Mock };
   let mockUsers: { refresh: Mock; stale: Mock };
   let mockAccessories: { refresh: Mock; stale: Mock };
+  let mockExpenses: { refresh: Mock; stale: Mock };
   let mockTeam: { refresh: Mock; stale: Mock };
   /** The screen the dashboard shows (RealtimeSync reloads only what it needs). */
   const router = { url: '/sales' };
@@ -96,6 +98,7 @@ describe('RealtimeSync', () => {
     mockFloorOptions = store();
     mockUsers = store();
     mockAccessories = store();
+    mockExpenses = store();
     mockTeam = store();
     router.url = '/sales';
     user = signal<Account | null>({ id: 'u0', email: 'arjun@404arena.in', name: 'Arjun Mehra' });
@@ -123,6 +126,7 @@ describe('RealtimeSync', () => {
         { provide: FloorOptionsStore, useValue: mockFloorOptions },
         { provide: UsersStore, useValue: mockUsers },
         { provide: AccessoriesStore, useValue: mockAccessories },
+        { provide: ExpensesStore, useValue: mockExpenses },
         { provide: TeamStore, useValue: mockTeam },
         { provide: Router, useValue: router },
       ],
@@ -394,6 +398,30 @@ describe('RealtimeSync', () => {
     expect(mockPricing.refresh).toHaveBeenCalledTimes(1);
     expect(mockAccessories.stale).toHaveBeenCalledTimes(1);
     expect(mockSales.stale).not.toHaveBeenCalled();
+  });
+
+  it('routes expense, category and agreed-salary pushes to the expenses screen only', async () => {
+    router.url = '/expenses/salaries';
+    await sync.setupArena('arena-123', true);
+    broadcast({
+      arena_id: 'arena-123',
+      kind: 'push',
+      kinds: ['expense.pay', 'expense_category.upsert', 'staff_salary.set'],
+      source: 'admin-web',
+    });
+    vi.advanceTimersByTime(AFTER);
+    expect(mockExpenses.refresh).toHaveBeenCalledTimes(1);
+    expect(mockArenaContext.load).not.toHaveBeenCalled();
+    expect(mockUsers.stale).not.toHaveBeenCalled();
+    expect(mockSales.stale).not.toHaveBeenCalled();
+    expect(mockFloor.refresh).not.toHaveBeenCalled();
+
+    router.url = '/sales';
+    broadcast({ arena_id: 'arena-123', kind: 'push', kinds: ['expense.void'], source: 'admin-web' });
+    vi.advanceTimersByTime(AFTER);
+    expect(mockExpenses.stale).toHaveBeenCalledTimes(1);
+    expect(mockExpenses.refresh).toHaveBeenCalledTimes(1);
+    expect(mockSales.refresh).not.toHaveBeenCalled();
   });
 
   it('a staff change pushed elsewhere re-reads the login’s own access (deactivation arrives only so)', async () => {

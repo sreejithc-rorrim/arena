@@ -16,6 +16,30 @@ together.
   scrubbed from this arena's invitations; bills and history stay. Inviting the same e-mail again
   brings them back. Schema: `staff_profiles.removed_at` (migration `20261026074452_staff_remove`,
   additive).
+- Admin Expenses (Money permission; under Reports in the nav). Running costs by category (Rent,
+  Electricity, Internet… from the standard list or the owner's own) with notes, and staff
+  salaries: each person's agreed salary (monthly or weekly, dated) and the months or weeks
+  recorded for them. Record salary is a quick form: pick the person and the month and the agreed
+  salary fills in; a month already recorded pays what is left instead of being recorded twice.
+  Every payment says whose money it was: the company's, or an owner's own (picked by their owner
+  record), and one expense may mix both. Payments are never edited: a mistake is reversed (same
+  source, owner, method and day) with a reason; an expense can be edited (never below what is
+  paid) and voided with a reason, its payments reversed when the owner confirms. Figures by
+  expense date (incurred = paid + unpaid) are kept apart from figures by payment date (from the
+  company account, paid personally, salaries paid); an owner's own money is shown as their
+  contribution, never as company cash out. Reports: by category, salaries by staff member, paid
+  vs unpaid, funding split, owner contributions, this month vs last and twelve months; CSVs of
+  expenses and of payments carry the source and payer. Nothing is generated or paid by itself.
+  Schema: `expense_categories`, `expenses`, `expense_payments` (append-only), `staff_salaries`;
+  ops `expense.add/update/pay/payment_reverse/void`, `expense_category.upsert/remove`,
+  `staff_salary.set`; reads `arena_expenses`, `arena_expense`, `arena_staff_salary`,
+  `expense_category_catalog` (migration `20261026115438_expenses_module`, additive). The floor
+  app is unchanged and never receives these tables.
+
+### Security
+- `audit_log`: the new expense and agreed-salary entries (amounts, salaries, notes, reasons) are
+  readable only by Money holders, like the expense tables; Reports-only members keep reading the
+  other entries as before.
 
 ### Changed
 - Removing a station is now a safe delete: it leaves the admin Stations list (the Removed

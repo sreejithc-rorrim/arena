@@ -14,6 +14,8 @@ import { SampleFloorApi } from '../core/floor/floor-api.sample';
 import { Clock } from '../core/time/clock';
 import { AccessoriesApi } from '../features/accessories/data/accessories-api';
 import { SampleAccessoriesApi } from '../features/accessories/data/accessories-api.sample';
+import { ExpensesApi } from '../features/expenses/data/expenses-api';
+import { SampleExpensesApi } from '../features/expenses/data/expenses-api.sample';
 import { PricingApi } from '../features/pricing/data/pricing-api';
 import { FloorOptionsApi } from '../features/settings/data/floor-options';
 import { SampleFloorOptionsApi } from '../features/settings/data/floor-options.sample';
@@ -40,8 +42,8 @@ function breakpoints(width: number) {
 }
 
 /**
- * Opens a dashboard URL on the sample APIs (floor, pricing, sales, accessories) at NOW, and
- * returns DOM helpers shared by the screen specs.
+ * Opens a dashboard URL on the sample APIs (floor, pricing, sales, accessories, expenses) at
+ * NOW, and returns DOM helpers shared by the screen specs.
  */
 export async function startPage(
   path: string,
@@ -53,6 +55,7 @@ export async function startPage(
     accessories: SampleAccessoriesApi;
     arena: SampleArenaApi;
     team: SampleTeamApi;
+    expenses: SampleExpensesApi;
   }) => void = () => undefined,
 ) {
   const floor = new SampleFloorApi(NOW);
@@ -62,6 +65,7 @@ export async function startPage(
   const accessories = new SampleAccessoriesApi();
   const arena = new SampleArenaApi();
   const team = new SampleTeamApi();
+  const expenses = new SampleExpensesApi(NOW);
   setup({
     floor,
     pricing,
@@ -69,6 +73,7 @@ export async function startPage(
     accessories,
     arena,
     team,
+    expenses,
   });
   TestBed.configureTestingModule({
     providers: [
@@ -81,6 +86,7 @@ export async function startPage(
       { provide: SalesApi, useValue: sales },
       { provide: FloorOptionsApi, useValue: floorOptions },
       { provide: TeamApi, useValue: team },
+      { provide: ExpensesApi, useValue: expenses },
       { provide: Clock, useValue: { now: () => NOW } },
       { provide: BreakpointObserver, useValue: breakpoints(width) },
       { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
@@ -145,6 +151,7 @@ export async function startPage(
     accessories,
     arena,
     team,
+    expenses,
     settle,
     doc,
     text,

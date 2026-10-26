@@ -26,7 +26,7 @@
 ## Scope (SLC)
 
 - Flutter app = **staff only** (floor: sessions, payments, bookings, controllers, members, own profile and bills — per permission). Owner screens (Today, Money, Reports, Settings, device game editing) were removed 2026-10-24: everyone lands on the Floor; never build owner features there.
-- **All owner features live on the admin web** (`apps/admin/`): sales, reports, voids, stations, games, pricing, users, settings, staff (team, access, terms).
+- **All owner features live on the admin web** (`apps/admin/`): sales, reports, voids, stations, games, pricing, users, settings, staff (team, access, terms), expenses and salaries (`money`; online only, never synced to devices — E-rows in `docs/OWNER_CONFIRMATION.md`).
 - UI direction = the screens already built (reuse their layout and shared components). No design export to follow.
 
 ## Layout
@@ -111,7 +111,7 @@ After implementing: **Implemented** (what changed) · **Files** (key ones) · **
 
 ## Known limitations
 
-- 7 admin specs fail on HEAD (auth "register…", 5 settings, stations "shows a station…"): outdated wording.
+- 18 admin specs fail on HEAD (sales-page 5, missed-bill-dialog 4, settings 5, stations 3, games 1) and `users-page.spec.ts` does not compile (`TeamMember.removed`, since bec82c7).
 - Admin initial bundle exceeds its 500 kB budget.
 - `pushOps` (admin) surfaces refusal codes but not the server hint.
 - Not built yet: push notifications (FCM).
