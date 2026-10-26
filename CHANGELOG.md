@@ -21,9 +21,9 @@ together.
 - Admin on phones and narrow screens (< 900px): a bottom bar with quick links (Overview, Sales,
   Stations, Members) and More, which opens the full navigation, arena switcher and sign-out as a
   sheet. The menu button in page headers is gone.
-- Release workflow migrates the hosted database before building the APK. A `v*` tag releases to
-  staging; production is a manual, reviewer-approved run. Each push saves an encrypted backup
-  first. Migrations that drop or retype data need an explicit `allow_destructive` re-run.
+- Release workflow also builds the signed staging APKs on every merge to `main`, kept as a
+  30-day run artifact (`arena-ops-main-<sha>-…`). Tags and manual runs still attach to a GitHub
+  Release. Database migrations stay a manual push.
 
 ## [0.0.1-alpha.3] - 2026-10-25
 
