@@ -350,7 +350,11 @@ unsent work stays in that person's database file and goes after they sign in.
   existing login without its consent), the owner-set starting password, and
   the floor app's "Add by e-mail" (it now explains that invitations are sent
   from the dashboard). Permissions, rename and deactivate are `staff.update`
-  ops through `sync_push`; a field the op leaves out keeps its value.
+  ops through `sync_push`; a field the op leaves out keeps its value. Removing
+  a staff member is `staff.remove`: the profile row stays (bills point at the
+  login) but is anonymised ("Deleted member", access off, personal details
+  erased, `removed_at` set); `staff.update` then answers `not_found`, and a new
+  invitation to the same e-mail brings the row back.
 * No service-role key exists anywhere in the apps or deployed code.
   Test logins on the local stack are created with Mailpit invitations or the
   local Auth admin API only.

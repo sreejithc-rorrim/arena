@@ -23,8 +23,9 @@ declare
   v_adj    boolean := false;
 begin
   perform _need(p_arena, 'settings');
+  -- A removed member (op_staff_remove) is gone: only a new invitation brings them back.
   select role, perms, active into v_role, v_old_perms, v_old_active from staff_profiles
-    where arena_id = p_arena and user_id = v_user for update;
+    where arena_id = p_arena and user_id = v_user and removed_at is null for update;
   if not found then raise exception 'not_found' using hint = 'staff'; end if;
   v_perms := coalesce(v_perms, v_old_perms);
   v_active := coalesce(v_active, v_old_active);

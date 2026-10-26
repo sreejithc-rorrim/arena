@@ -1,8 +1,12 @@
-# Builds the signed floor-app APKs and attaches them to a GitHub Release.
-# A `v*` tag builds staging; a manual run picks the flavor (prod only once
-# AppConfig.hostedSupabaseHosts lists the production host — until then the
-# app refuses to start). Secrets live in the GitHub Environment of the same
-# environment (`staging` / `production`), same names in each:
+# Migrates the hosted database, then builds the signed floor-app APKs and
+# attaches them to a GitHub Release. A `v*` tag releases to staging; a manual
+# run picks the flavor (production: give the `production` GitHub Environment a
+# required reviewer, so nothing reaches it without an approval).
+# Secrets live in the GitHub Environment of the same name (`staging` /
+# `production`), same names in each:
+#   SUPABASE_ACCESS_TOKEN      personal access token of a member of the project (CLI)
+#   SUPABASE_DB_PASSWORD       the project's database password
+#   BACKUP_PASSPHRASE          encrypts the pre-push dump (keep a copy in the password manager)
 #   DART_DEFINES               full contents of dart_define.<flavor>.json (publishable key only)
 #   ANDROID_KEYSTORE_BASE64    base64 of the release .jks (docs/RELEASE.md §4)
 #   ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
@@ -21,6 +25,10 @@ on:
         type: choice
         options: [staging, prod]
         default: staging
+      allow_destructive:
+        description: Push migrations that drop tables/columns or change column types (read them first)
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -29,7 +37,110 @@ concurrency:
   group: release-${{ inputs.tag || github.ref_name }}-${{ inputs.flavor || 'staging' }}
 
 jobs:
+  # The schema goes first: an APK that needs the new schema never ships if the
+  # migration fails. Each migration must still work with the previous APK
+  # (devices update late and may hold unsynced takings).
+  database:
+    runs-on: ubuntu-latest
+    environment: ${{ (inputs.flavor || 'staging') == 'prod' && 'production' || 'staging' }}
+    concurrency:
+      group: database-${{ inputs.flavor || 'staging' }}
+      cancel-in-progress: false
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      # Pinned like AppConfig.hostedSupabaseHosts: a secret can't redirect the push.
+      PROJECT_REF: ${{ (inputs.flavor || 'staging') == 'prod' && 'oilylxydibubupuqghbw' || 'sqznpjqktvsabjxvpzjh' }}
+      ALLOW_DESTRUCTIVE: ${{ inputs.allow_destructive || false }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.117.0
+
+      - name: Link the project
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          for v in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD BACKUP_PASSPHRASE; do
+            [ -n "${!v}" ] || { echo "::error::Secret for $v is missing in this environment"; exit 1; }
+          done
+          supabase link --project-ref "$PROJECT_REF"
+
+      # Pending = local files whose version the remote history lacks. If the
+      # CLI's table format changes, every file counts as pending, which trips
+      # the destructive check below instead of skipping it.
+      - name: Pending migrations and destructive check
+        id: pending
+        run: |
+          remote=$(supabase migration list --linked | awk -F'|' '{gsub(/ /, "", $2)} $2 ~ /^[0-9]{14}$/ {print $2}')
+          pending=()
+          for f in supabase/migrations/*.sql; do
+            v=$(basename "$f"); v=${v%%_*}
+            grep -qx "$v" <<<"$remote" || pending+=("$f")
+          done
+          echo "count=${#pending[@]}" >> "$GITHUB_OUTPUT"
+          echo "### Migrations for $PROJECT_REF ($TAG)" >> "$GITHUB_STEP_SUMMARY"
+          if [ ${#pending[@]} -eq 0 ]; then
+            echo "Up to date." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          printf -- '- `%s`\n' "${pending[@]##*/}" >> "$GITHUB_STEP_SUMMARY"
+
+          hits=$(grep -n -i -E 'drop[[:space:]]+(table|column|schema|sequence|materialized)|truncate|alter[[:space:]]+column[^;]*[[:space:]]type[[:space:]]' "${pending[@]}" || true)
+          if [ -n "$hits" ]; then
+            echo "$hits"
+            if [ "$ALLOW_DESTRUCTIVE" != true ]; then
+              echo "::error::Pending migrations drop or retype data. Read them, then re-run manually with allow_destructive."
+              exit 1
+            fi
+            echo "::warning::Destructive migrations allowed for this run."
+          fi
+
+      - name: Back up the database (encrypted)
+        if: steps.pending.outputs.count != '0'
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          umask 077
+          dir="$RUNNER_TEMP/backup" && mkdir -p "$dir"
+          supabase db dump --linked -f "$dir/schema.sql"
+          supabase db dump --linked --data-only --use-copy -f "$dir/data.sql"
+          tar -C "$dir" -czf - schema.sql data.sql \
+            | gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 \
+                --passphrase-fd 3 3<<<"$BACKUP_PASSPHRASE" -o "$RUNNER_TEMP/db-backup.tar.gz.gpg"
+          rm -rf "$dir"
+      - uses: actions/upload-artifact@v4
+        if: steps.pending.outputs.count != '0'
+        with:
+          name: db-backup-${{ env.PROJECT_REF }}-${{ env.TAG }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/db-backup.tar.gz.gpg
+          retention-days: 30
+          if-no-files-found: error
+
+      # Never --include-seed: seed.sql is for the local stack.
+      - name: Push migrations
+        if: steps.pending.outputs.count != '0'
+        run: supabase db push --linked --yes
+
+      - name: Verify
+        run: |
+          remote=$(supabase migration list --linked | awk -F'|' '{gsub(/ /, "", $2)} $2 ~ /^[0-9]{14}$/ {print $2}')
+          for f in supabase/migrations/*.sql; do
+            v=$(basename "$f"); v=${v%%_*}
+            grep -qx "$v" <<<"$remote" || { echo "::error::$f is not applied on $PROJECT_REF"; exit 1; }
+          done
+          supabase db advisors --linked --type security --fail-on error
+
+      - name: Unlink
+        if: always()
+        run: rm -rf supabase/.temp
+
   android:
+    needs: database
     runs-on: ubuntu-latest
     environment: ${{ (inputs.flavor || 'staging') == 'prod' && 'production' || 'staging' }}
     env:

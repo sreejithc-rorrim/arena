@@ -5,6 +5,9 @@ import { MatIcon } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { isOwnerLevel } from '../../../core/arena/arena-api';
 import { ArenaContext } from '../../../core/arena/arena-context';
+import { toAppError } from '../../../core/auth/auth-api';
+import { Session } from '../../../core/auth/session';
+import { ConfirmDialog, ConfirmDialogData } from '../../../shared/confirm/confirm-dialog';
 import { DetailPane } from '../../../shared/list-detail/detail-pane';
 import { DetailRow } from '../../../shared/list-detail/detail-row';
 import { DetailSection } from '../../../shared/list-detail/detail-section';
@@ -13,6 +16,7 @@ import { StatusPill } from '../../../shared/status-pill/status-pill';
 import { UserAccess } from '../../users/components/user-access';
 import { initials } from '../../users/components/user-format';
 import { ArenaUser } from '../../users/data/user.models';
+import { UsersStore } from '../../users/data/users-store';
 import { UserDialog, UserDialogData, UserDialogResult } from '../../users/dialogs/user-dialog';
 import { exemptFromTerms } from '../../settings/data/staff-terms';
 import { TeamStore } from '../data/team-store';
@@ -71,6 +75,27 @@ export type MemberTab = 'overview' | 'profile' | 'access';
               </div>
             }
           </app-detail-section>
+          @if (user(); as u) {
+            <app-detail-section
+              heading="Remove from team"
+              subtitle="Erases their name and personal details. Their bills stay, shown as Deleted member."
+            >
+              @if (removeNote(); as note) {
+                <p role="note" class="text-[13px] leading-[1.45] text-muted">{{ note }}</p>
+              }
+              <div>
+                <button
+                  mat-button
+                  type="button"
+                  class="danger-action"
+                  [disabled]="removing() || !canRemove()"
+                  (click)="remove(u)"
+                >
+                  <mat-icon aria-hidden="true">person_remove</mat-icon>Remove
+                </button>
+              </div>
+            </app-detail-section>
+          }
         }
         @case ('profile') {
           <app-member-profile [staff]="s" [exempt]="termsExempt()" />
@@ -88,6 +113,8 @@ export type MemberTab = 'overview' | 'profile' | 'access';
 export class MemberDetail {
   private readonly arena = inject(ArenaContext);
   private readonly team = inject(TeamStore);
+  private readonly users = inject(UsersStore);
+  private readonly session = inject(Session);
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
 
@@ -142,6 +169,51 @@ export class MemberDetail {
     const perms = this.user()?.perms ?? [];
     return perms.includes('money') || perms.includes('reports') ? 'Staff · admin access' : 'Staff';
   });
+
+  protected readonly removing = computed(() => this.users.saving() === this.user()?.userId);
+  /**
+   * Why this member cannot be removed from here (staff.remove refuses it): it is you, or they
+   * hold Money, Reports or bill access and you are not an owner. Empty when they can.
+   */
+  protected readonly removeNote = computed(() => {
+    const u = this.user();
+    if (!u) return '';
+    if (u.userId === this.session.user()?.id) return 'This is you: you cannot remove yourself.';
+    const guarded = ['money', 'reports', 'bill_edit', 'bill_record'];
+    if (u.perms.some((p) => guarded.includes(p)) && this.arena.currentRole() !== 'owner') {
+      return 'They have Money, Reports or bill access, so only an owner can remove them.';
+    }
+    return '';
+  });
+  protected readonly canRemove = computed(() => this.canEdit() && !this.removeNote());
+
+  /** Permanent (only a new invitation brings them back): confirm first. */
+  protected remove(u: ArenaUser): void {
+    this.dialog
+      .open<ConfirmDialog, ConfirmDialogData, boolean>(ConfirmDialog, {
+        data: {
+          title: `Remove ${u.name}?`,
+          message:
+            'They are signed out and lose access to this venue. Their name, e-mail and personal details are erased here; their bills stay and show "Deleted member". To bring them back later, invite their e-mail again.',
+          confirm: 'Remove',
+          danger: true,
+        },
+        width: '520px',
+        maxWidth: 'calc(100vw - 32px)',
+      })
+      .afterClosed()
+      .subscribe(async (yes) => {
+        if (!yes) return;
+        try {
+          await this.users.remove(u);
+          await this.team.load(true);
+          this.say(`${u.name} removed from the team`);
+          this.closed.emit();
+        } catch (e) {
+          this.say(toAppError(e).message);
+        }
+      });
+  }
 
   private say(message: string): void {
     this.snack.open(message, undefined, { duration: 3200 });

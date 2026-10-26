@@ -22,6 +22,7 @@ export function toTeamMember(r: Row): TeamMember {
     role: r['role'] === 'owner' ? 'owner' : 'staff',
     active: r['active'] === true,
     createdAt: String(r['created_at'] ?? ''),
+    removed: r['removed_at'] != null,
   };
 }
 
@@ -32,7 +33,7 @@ class SupabaseTeamApi extends TeamApi {
     const client = await this.supabase.client();
     const { data, error } = await client
       .from('staff_profiles')
-      .select('id, user_id, name, role, active, created_at')
+      .select('id, user_id, name, role, active, created_at, removed_at')
       .eq('arena_id', arenaId);
     if (error) throw dbError(error);
     return ((data as Row[]) ?? []).map(toTeamMember);

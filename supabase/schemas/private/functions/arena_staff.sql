@@ -5,9 +5,10 @@
 -- SECURITY INVOKER wrapper public.arena_staff.
 --
 -- One jsonb object per staff_profiles row of p_arena: {user_id, name, email,
--- role, perms, active, invited, bills_30d, takings_30d_paise,
+-- role, perms, active, invited, removed, bills_30d, takings_30d_paise,
 -- refunds_30d_paise}. email comes from auth.users (not readable by clients
--- directly); invited = the login has never signed in. The 30-day figures count
+-- directly), masked (first letter, then •••@domain) for a removed member;
+-- invited = the login has never signed in. The 30-day figures count
 -- the payments and refunds the member recorded since
 -- now() - 30 days: bills = distinct sessions they took a payment for,
 -- takings = net paise (payments minus refunds), refunds = paise refunded
@@ -40,8 +41,11 @@ begin
         from money group by created_by
     )
     select jsonb_agg(jsonb_build_object(
-        'user_id', s.user_id, 'name', s.name, 'email', u.email, 'role', s.role,
-        'perms', to_jsonb(s.perms), 'active', s.active,
+        'user_id', s.user_id, 'name', s.name,
+        'email', case when s.removed_at is null then u.email
+                      else left(u.email, 1) || '•••@' || split_part(u.email, '@', 2) end,
+        'role', s.role, 'perms', to_jsonb(s.perms), 'active', s.active,
+        'removed', s.removed_at is not null,
         'invited', u.last_sign_in_at is null,
         'bills_30d', coalesce(p.bills, 0), 'takings_30d_paise', coalesce(p.net, 0),
         'refunds_30d_paise', coalesce(p.refunds, 0))

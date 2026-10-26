@@ -40,6 +40,11 @@ export abstract class UsersApi {
     userId: string,
     change: UserChange,
   ): Promise<{ adjusted: boolean }>;
+  /**
+   * Removes a staff member for good (`staff.remove`): their name and details are erased and their
+   * bills show "Deleted member"; the same e-mail can be invited again.
+   */
+  abstract remove(arenaId: string, userId: string): Promise<void>;
 }
 
 /** Refusals of staff.update, invite and withdraw, worded for the Users screen. */
@@ -188,6 +193,15 @@ class SupabaseUsersApi extends UsersApi {
       USER_MESSAGES,
     );
     return { adjusted: result?.['adjusted'] === true };
+  }
+
+  async remove(arenaId: string, userId: string): Promise<void> {
+    await pushOps(
+      await this.supabase.client(),
+      arenaId,
+      [{ kind: 'staff.remove', payload: { user_id: userId } }],
+      USER_MESSAGES,
+    );
   }
 }
 

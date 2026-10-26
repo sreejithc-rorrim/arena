@@ -15,7 +15,8 @@
 --   'invite_invalid'); the caller is not already an owner here
 --   ('owner_profile').
 -- Then upserts the caller's staff_profiles row in the invite's arena (role,
--- perms and name from the invite, active) — the only arena it can touch — keeps
+-- perms and name from the invite, active; a removed member's kept row comes back,
+-- removed_at cleared) — the only arena it can touch — keeps
 -- someone holding Settings (_assert_settings_holder) and marks the invite
 -- accepted, so the token works once. Returns {arena_id, arena_name, role}.
 create or replace function private.accept_invite (
@@ -83,7 +84,7 @@ begin
     values (v_inv.arena_id, auth.uid(), v_inv.name, v_inv.role, v_inv.perms, true)
   on conflict (user_id, arena_id) do update
     set name = excluded.name, role = excluded.role, perms = excluded.perms, active = true,
-        updated_at = statement_timestamp();
+        removed_at = null, updated_at = statement_timestamp();
   perform _assert_settings_holder(v_inv.arena_id);
   update staff_invites set accepted_at = statement_timestamp(), accepted_by = auth.uid()
    where id = v_inv.id;

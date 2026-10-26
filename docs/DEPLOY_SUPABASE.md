@@ -94,6 +94,20 @@ client functions predates the current client API (it still names
 
 ## 4. Apply the migrations (your terminal, from the repo root)
 
+**Routine releases go through CI**, not this terminal path: `.github/workflows/release.yml`
+pushes the tag's migrations before it builds the APK. A `v*` tag releases to staging. Production
+is a manual run (flavor `prod`), gated by a required reviewer on the `production` GitHub
+Environment. The workflow pins the project ref per environment and lists the pending migrations
+in the run summary. It refuses any that drop tables or columns or change a column type until it
+is re-run manually with `allow_destructive`. Before pushing, it saves an encrypted
+`supabase db dump` (schema + data) as a 30-day run artifact; decrypt it with
+`gpg -d db-backup.tar.gz.gpg | tar xz` and the `BACKUP_PASSPHRASE`. It then checks that every
+migration is applied and that the security advisor reports no errors. Environment secrets:
+`SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `BACKUP_PASSPHRASE` (plus the APK secrets).
+The first push to a fresh project needs `allow_destructive`, because the history contains drops.
+Step 5 (security audit) and dashboard-only settings (step 3) stay manual. The steps below are for
+the first link and for recovery.
+
 ```bash
 supabase login
 ```

@@ -157,3 +157,9 @@ sentry.properties
 
 # Node dependencies at any level (apps/admin has its own ignore too).
 node_modules/
+
+# Database dumps (pg_dump / supabase db dump) hold customer and money rows: keep
+# them out of git, in the password-managed backup store.
+/backup/
+backup_*.sql
+*.dump

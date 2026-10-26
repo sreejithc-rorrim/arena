@@ -154,6 +154,15 @@ export class SampleUsersApi extends UsersApi {
     return { adjusted };
   }
 
+  async remove(_arenaId: string, userId: string): Promise<void> {
+    if (!this.users.some((u) => u.userId === userId)) {
+      throw new AppError('not_found', 'That person is no longer on the list. Refresh');
+    }
+    this.users = this.users.map((u) =>
+      u.userId === userId ? { ...u, name: 'Deleted member', perms: [], active: false } : u,
+    );
+  }
+
   private fail(messages: Readonly<Record<string, string>>): void {
     const code = this.failNext;
     if (!code) return;

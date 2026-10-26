@@ -3,7 +3,8 @@
 -- One row per (auth user, arena). Active rows are what app_arena_ids() returns, so
 -- this table drives every RLS policy and op_* permission check (app_has_perm,
 -- app_is_owner). Written by bootstrap_owner (first owner), add_staff_by_email
--- (owner links an existing login) and op_staff_update (staff.update). A
+-- (owner links an existing login), op_staff_update (staff.update) and
+-- op_staff_remove (staff.remove: the row stays for history, anonymised). A
 -- role='owner' row always holds every known perm and stays active, and every arena
 -- must keep an active member holding 'settings' (_assert_settings_holder).
 create table "public"."staff_profiles" (
@@ -18,6 +19,7 @@ create table "public"."staff_profiles" (
   "created_at" timestamp with time zone not null default now(),
   "updated_at" timestamp with time zone not null default now(),
   "sync_xid"   xid8                     not null default pg_current_xact_id(),
+  "removed_at" timestamp with time zone,
   constraint "staff_profiles_arena_id_fkey" foreign key (arena_id) references public.arenas(id)
     on delete cascade,
   constraint "staff_profiles_pkey" primary key (id),
@@ -39,6 +41,8 @@ comment on column public.staff_profiles.role is '''owner'' or ''staff''. An owne
 comment on column public.staff_profiles.perms is 'Permission codes from _known_perms(): start, bill, discount, members, stations, money, reports, settings, bill_edit, bill_record. Holding money or reports makes the member owner level (app_is_owner).';
 
 comment on column public.staff_profiles.active is 'False revokes all access server-side: app_arena_ids and the permission helpers only consider active rows.';
+
+comment on column public.staff_profiles.removed_at is 'Set when the member was removed (op_staff_remove): the row is kept so their bills keep a creator, but the name is replaced by ''Deleted member'', access is off and personal details are erased. Cleared when the same login accepts a new invitation.';
 
 comment on column public.staff_profiles.sync_xid is 'Id of the transaction that last wrote the row (set by trigger sync_stamp); change-feed cursor for sync_pull.';
 

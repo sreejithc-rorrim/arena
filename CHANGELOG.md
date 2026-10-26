@@ -10,6 +10,21 @@ together.
 
 ## [Unreleased]
 
+### Added
+- Admin Team: Remove a staff member (a safe delete, op `staff.remove`). Their name becomes
+  "Deleted member", access goes off, personal details are erased and their e-mail is masked and
+  scrubbed from this arena's invitations; bills and history stay. Inviting the same e-mail again
+  brings them back. Schema: `staff_profiles.removed_at` (migration `20261026074452_staff_remove`,
+  additive).
+
+### Changed
+- Admin on phones and narrow screens (< 900px): a bottom bar with quick links (Overview, Sales,
+  Stations, Members) and More, which opens the full navigation, arena switcher and sign-out as a
+  sheet. The menu button in page headers is gone.
+- Release workflow migrates the hosted database before building the APK. A `v*` tag releases to
+  staging; production is a manual, reviewer-approved run. Each push saves an encrypted backup
+  first. Migrations that drop or retype data need an explicit `allow_destructive` re-run.
+
 ## [0.0.1-alpha.3] - 2026-10-25
 
 ### Added

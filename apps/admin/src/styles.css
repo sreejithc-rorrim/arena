@@ -3,3 +3,15 @@
 /* Structural positioning for CDK overlays (the arena menu); no visual styles. */
 @import '@angular/cdk/overlay-prebuilt.css';
 
+/* Full-height app panes: the viewport less the compact quick links bar (core/layout/shell). */
+@utility h-app {
+  height: calc(100dvh - var(--app-bottom-bar, 0px));
+}
+
+
+/* Compact: toasts sit above the quick links bar (core/layout/shell), not over it. */
+@media (max-width: 899.98px) {
+  .mat-mdc-snack-bar-container {
+    margin-bottom: calc(var(--spacing-bottom-bar) + 8px);
+  }
+}

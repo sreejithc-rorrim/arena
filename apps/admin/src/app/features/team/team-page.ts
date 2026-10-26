@@ -127,10 +127,10 @@ export class TeamPage {
   protected readonly params = childParams();
 
   protected readonly initialsOf = initials;
-  /** Staff only, active first, each group by name. */
+  /** Staff only (removed ones are gone), active first, each group by name. */
   protected readonly people = computed(() =>
     (this.team.staff() ?? [])
-      .filter(isEmployee)
+      .filter((s) => isEmployee(s) && !s.removed)
       .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name)),
   );
   protected readonly selected = computed(() => {
