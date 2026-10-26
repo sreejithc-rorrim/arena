@@ -1,5 +1,7 @@
 -- op_resource_set_status — sync op 'resource.set_status': put a station in service, take it out
---   (maintenance, temporarily_unavailable) or remove it (disabled).
+--   (maintenance, temporarily_unavailable) or remove it (disabled). Removing is final (a safe
+--   delete: the row stays for past bills, its name is free again); a removed station refuses
+--   any other status (not_found, hint 'resource removed').
 --
 -- Permission: settings.
 -- Payload: id, status ('available' | 'maintenance' | 'temporarily_unavailable' | 'disabled').
@@ -24,11 +26,17 @@ create or replace function public.op_resource_set_status (
 declare
   v_id     uuid := (p->>'id')::uuid;
   v_status text := p->>'status';
+  v_old    text;
 begin
   perform _need(p_arena, 'settings');
   perform _lock_resources(p_arena, array[v_id]);
-  if not exists (select 1 from resources where id = v_id and arena_id = p_arena) then
+  select status into v_old from resources where id = v_id and arena_id = p_arena;
+  if not found then
     raise exception 'not_found' using hint = 'resource';
+  end if;
+  if v_old = 'disabled' then
+    if v_status = 'disabled' then return '{}'::jsonb; end if;
+    raise exception 'not_found' using hint = 'resource removed';
   end if;
   if v_status is distinct from 'available' then
     if exists (select 1 from session_segments
@@ -43,7 +51,7 @@ end;
 $function$;
 
 comment on function public.op_resource_set_status(uuid, jsonb) is
-  'Sync op resource.set_status: puts a station in or out of service or removes it; refuses anything but available while a session is on it (resource_busy).';
+  'Sync op resource.set_status: puts a station in or out of service or removes it for good (disabled, which frees its name); refuses anything but available while a session is on it (resource_busy), and any change to a removed station (not_found).';
 
 grant execute
   on function "public"."op_resource_set_status"(uuid, jsonb)

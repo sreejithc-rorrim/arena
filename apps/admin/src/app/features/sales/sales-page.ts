@@ -90,6 +90,9 @@ const PAGE = 40;
     >
       <ng-container list>
         <app-list-pane-header title="Sales">
+          <button actions mat-flat-button type="button" (click)="addMissed()">
+            <mat-icon aria-hidden="true">add</mat-icon>Add missed bill
+          </button>
           <mat-form-field class="arena-search">
             <mat-icon matPrefix aria-hidden="true">search</mat-icon>
             <input
@@ -188,9 +191,6 @@ const PAGE = 40;
                 (click)="refresh()"
               >
                 <mat-icon aria-hidden="true">refresh</mat-icon>
-              </button>
-              <button mat-button type="button" (click)="addMissed()">
-                <mat-icon aria-hidden="true">add</mat-icon>Missed bill
               </button>
               <button
                 mat-button

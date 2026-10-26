@@ -104,11 +104,12 @@ export class StationDialog {
   protected readonly error = signal('');
   protected readonly busy = signal(false);
 
-  /** The next free "<CODE>-<n>". */
+  /** The next free "<CODE>-<n>" (a removed station's name is free again). */
   protected readonly auto = computed(() => {
     const prefix = this.code() || this.venue.words().one;
-    const taken = new Set(this.floor.stations().map((s) => s.name.toLowerCase()));
-    let n = this.floor.stations().filter((s) => s.activityCodes.includes(this.code())).length + 1;
+    const onFloor = this.floor.stations().filter((s) => s.status !== 'disabled');
+    const taken = new Set(onFloor.map((s) => s.name.toLowerCase()));
+    let n = onFloor.filter((s) => s.activityCodes.includes(this.code())).length + 1;
     while (taken.has(`${prefix}-${n}`.toLowerCase())) n++;
     return `${prefix}-${n}`;
   });
@@ -131,14 +132,13 @@ export class StationDialog {
       this.error.set('Use up to 40 characters');
       return;
     }
-    const taken = this.floor.stations().find((s) => s.name.toLowerCase() === name.toLowerCase());
+    // A removed station frees its name (its past bills keep it); only stations still on the floor
+    // count.
+    const taken = this.floor
+      .stations()
+      .some((s) => s.status !== 'disabled' && s.name.toLowerCase() === name.toLowerCase());
     if (taken) {
-      // A removed station keeps its name (past bills use it): bring that one back instead.
-      this.error.set(
-        taken.status === 'disabled'
-          ? `${name} was removed · restore it from Removed below the station list`
-          : `${name} already exists`,
-      );
+      this.error.set(`${name} already exists`);
       return;
     }
     const id = crypto.randomUUID();

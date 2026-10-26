@@ -18,7 +18,6 @@ create table "public"."resources" (
   "sync_xid"     xid8                     not null default pg_current_xact_id(),
   constraint "resources_arena_id_fkey" foreign key (arena_id) references public.arenas(id)
     on delete cascade,
-  constraint "resources_arena_id_name_key" unique (arena_id, name),
   constraint "resources_kind_check"
     check ((kind = ANY (ARRAY['station'::text, 'table'::text, 'room'::text]))),
   constraint "resources_pkey" primary key (id),
@@ -32,11 +31,11 @@ comment on table public.resources is 'Bookable places on the floor (gaming stati
 
 comment on column public.resources.arena_id is 'Owning arena (tenant). RLS limits reads to arenas the caller is an active member of.';
 
-comment on column public.resources.name is 'Display name, unique within the arena (e.g. HEX, Pool Table 1).';
+comment on column public.resources.name is 'Display name (e.g. HEX, Pool Table 1), unique among the arena''s stations still on the floor (ux_resources_name): a removed one frees it, while its bills keep it.';
 
 comment on column public.resources.kind is 'One of station, table, room.';
 
-comment on column public.resources.status is 'One of available, maintenance, temporarily_unavailable, disabled. Set by resource.upsert / resource.set_status.';
+comment on column public.resources.status is 'One of available, maintenance, temporarily_unavailable, disabled. Set by resource.upsert / resource.set_status. disabled = removed (a safe delete): final, the row stays for history and its name is free again.';
 
 comment on column public.resources.current_mode is 'Activity code the resource is locked to (e.g. a PS5/VR station in VR mode); null = not mode-locked. Starts for another activity are refused (_mode_ok); changed by resource.set_mode only while nothing is open on it.';
 
@@ -46,6 +45,10 @@ alter table "public"."resources"
   enable row level security;
 
 create index ix_resources_sync on public.resources using btree (arena_id, sync_xid);
+
+-- A name is taken only by stations still on the floor: a removed (disabled) one frees it.
+create unique index ux_resources_name on public.resources using btree (arena_id, name)
+  where (status <> 'disabled'::text);
 
 create trigger t_resources_sync
   before insert or update on public.resources

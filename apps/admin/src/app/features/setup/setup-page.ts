@@ -614,7 +614,12 @@ export class SetupPage {
       return;
     }
     const catalog = this.catalog.hasValue() ? this.catalog.value() : [];
-    const taken = new Set(this.floor.stations().map((s) => s.name.toLowerCase()));
+    const taken = new Set(
+      this.floor
+        .stations()
+        .filter((s) => s.status !== 'disabled')
+        .map((s) => s.name.toLowerCase()),
+    );
     let order = Math.max(-1, ...this.floor.stations().map((s) => s.sortOrder)) + 1;
     for (const [i, t] of types.entries()) {
       const noun = catalog.find((c) => c.code === t.code)?.noun ?? this.venue.noun();

@@ -79,7 +79,10 @@ import { PAY_METHODS, PayMethod, methodName, parseRupees, rupeesText } from '../
             <mat-label>Station</mat-label>
             <mat-select [value]="stationId()" (selectionChange)="pickStation($event.value)">
               @for (s of floor.stations(); track s.id) {
-                <mat-option [value]="s.id">{{ s.name }}</mat-option>
+                <!-- A removed station is never offered. -->
+                @if (s.status !== 'disabled') {
+                  <mat-option [value]="s.id">{{ s.name }}</mat-option>
+                }
               }
             </mat-select>
           </mat-form-field>

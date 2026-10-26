@@ -8,8 +8,9 @@
 --   deleted).
 -- A status change to anything but available is refused while a session is on the
 -- station (resource_busy), as resource.set_status does; the station row is locked first.
--- Checks / errors: forbidden; not_found (id belongs to another arena); resource_busy; duplicate
---   (name taken); activity_missing; constraint failures map to invalid.
+-- Checks / errors: forbidden; not_found (id belongs to another arena, or the station was
+--   removed); resource_busy; duplicate (name taken by a station still on the floor);
+--   activity_missing; constraint failures map to invalid.
 -- Writes: resources, resource_activities. Returns: {}.
 -- Server-only: not executable by anon/authenticated; reached through sync_push.
 create or replace function public.op_resource_upsert (
@@ -30,6 +31,10 @@ begin
   end if;
   perform _lock_resources(p_arena, array[v_id]);
   select status into v_old from resources where id = v_id and arena_id = p_arena;
+  -- Removal is final (resource.set_status disabled): a removed station is never edited again.
+  if v_old = 'disabled' then
+    raise exception 'not_found' using hint = 'resource removed';
+  end if;
   if found and p ? 'status' and (p->>'status') is distinct from v_old
      and (p->>'status') is distinct from 'available'
      and exists (select 1 from session_segments

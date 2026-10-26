@@ -422,7 +422,9 @@ class _AddMissedBillSheetState extends ConsumerState<AddMissedBillSheet> {
                 decoration: const InputDecoration(labelText: 'Station'),
                 items: [
                   for (final r in stations)
-                    if (_typesFor(r, activities).isNotEmpty)
+                    // A removed (disabled) station is never offered.
+                    if (r.status != ResourceStatus.disabled &&
+                        _typesFor(r, activities).isNotEmpty)
                       DropdownMenuItem(value: r.id, child: Text(r.name)),
                 ],
                 onChanged: _busy

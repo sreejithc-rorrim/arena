@@ -138,8 +138,12 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
     for (final a in activities) {
       if (a.code == _activityCode) activity = a;
     }
+    // A removed (disabled) station is never offered.
     final specificOptions = resources
-        .where((r) => _activityCode != null && r.activityCodes.contains(_activityCode))
+        .where((r) =>
+            r.status != ResourceStatus.disabled &&
+            _activityCode != null &&
+            r.activityCodes.contains(_activityCode))
         .toList();
 
     return Scaffold(

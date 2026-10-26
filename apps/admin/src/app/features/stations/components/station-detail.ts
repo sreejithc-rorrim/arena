@@ -38,8 +38,8 @@ import { STATE_TONE, activityLines, rateLine, stationIcon } from '../data/statio
 /**
  * One station: what is on now, figures for today and 30 days (aggregated on the server), name and
  * type (saved together from the unsaved-changes bar), in service, its accessories, and recent
- * bills (read when the station is opened). Remove takes the station off the floor; past bills
- * keep its name.
+ * bills (read when the station is opened). Remove is a safe delete: the station leaves the floor
+ * for good and its name is free again, while past bills and reports keep it.
  */
 @Component({
   selector: 'app-station-detail',
@@ -285,7 +285,10 @@ export class StationDetail {
     if (
       this.floor
         .stations()
-        .some((x) => x.id !== s.id && x.name.toLowerCase() === name.toLowerCase())
+        .some(
+          (x) =>
+            x.id !== s.id && x.status !== 'disabled' && x.name.toLowerCase() === name.toLowerCase(),
+        )
     ) {
       this.error.set(`${name} already exists`);
       return;
@@ -332,7 +335,7 @@ export class StationDetail {
         data: {
           title: `Remove ${s.name}?`,
           message:
-            'It leaves the floor app and moves to Removed below the station list. Past bills keep its name. Restore it from there any time.',
+            'It leaves the floor app and this list for good; it cannot be restored. Past bills and reports keep its name, and the name can be used for a new station.',
           confirm: 'Remove',
           danger: true,
         },

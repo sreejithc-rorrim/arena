@@ -41,7 +41,11 @@ class FloorScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final active =
         ref.watch(activeSessionsProvider).value ?? const <ActiveSession>[];
-    final resources = ref.watch(resourcesProvider).value ?? const <Resource>[];
+    // A removed (disabled) station is gone from the floor; past bills keep its name.
+    final resources = [
+      for (final r in ref.watch(resourcesProvider).value ?? const <Resource>[])
+        if (r.status != ResourceStatus.disabled) r,
+    ];
     final now = ref.watch(nowProvider).value ?? ref.watch(clockProvider).now();
 
     // Map each resource to the session currently playing on it.

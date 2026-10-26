@@ -18,6 +18,13 @@ together.
   additive).
 
 ### Changed
+- Removing a station is now a safe delete: it leaves the admin Stations list (the Removed
+  section and Restore are gone), the floor app's floor, booking and missed-bill pickers, and
+  can no longer be edited or restored (`resource.set_status` / `resource.upsert` answer
+  `not_found`). Its name is free for a new station; Sales, reports and past bills still show it.
+  Schema: the per-arena unique station name now ignores removed stations (`ux_resources_name`,
+  migration `20261026092618_station_safe_delete`; drops only the old constraint, no data).
+- Admin Sales: "Add missed bill" moved to the top bar, where other pages keep their main action.
 - Admin on phones and narrow screens (< 900px): a bottom bar with quick links (Overview, Sales,
   Stations, Members) and More, which opens the full navigation, arena switcher and sign-out as a
   sheet. The menu button in page headers is gone.

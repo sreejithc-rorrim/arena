@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, computed, effect, inject, input } from '@angular/core';
 import { MatButton } from '@angular/material/button';
 import { MatChipListbox, MatChipListboxChange, MatChipOption } from '@angular/material/chips';
 import { MatDialog } from '@angular/material/dialog';
@@ -7,14 +7,8 @@ import { MatProgressBar } from '@angular/material/progress-bar';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
 import { ArenaContext } from '../../core/arena/arena-context';
-import { toAppError } from '../../core/auth/auth-api';
 import { FloorRead, FloorStore } from '../../core/floor/floor-store';
-import {
-  FLOOR_STATE_LABEL,
-  LiveStation,
-  Station,
-  liveStations,
-} from '../../core/floor/floor.models';
+import { FLOOR_STATE_LABEL, LiveStation, liveStations } from '../../core/floor/floor.models';
 import { Layout } from '../../core/layout/layout';
 import { injectNow } from '../../core/time/ticker';
 import { ListDetail } from '../../shared/list-detail/list-detail';
@@ -29,7 +23,7 @@ import { StationDialog, StationDialogData, StationDialogResult } from './dialogs
 /**
  * Stations: every station with what is on it now and its accessories, filtered by type. Type
  * filter and selection are in the URL (`?type=PS5&id=…`); on a wide screen the first station is
- * shown when none is chosen. Removed stations are listed apart, restorable.
+ * shown when none is chosen. Removed stations are not listed (Sales and reports still name them).
  */
 @Component({
   selector: 'app-stations-page',
@@ -123,32 +117,6 @@ import { StationDialog, StationDialogData, StationDialogResult } from './dialogs
                 }}
               </p>
             }
-            @if (removed().length) {
-              <section aria-labelledby="stations-removed" class="mt-4 flex flex-col gap-1 px-2">
-                <h3
-                  id="stations-removed"
-                  class="text-xs font-semibold tracking-wide text-muted uppercase"
-                >
-                  Removed
-                </h3>
-                <ul class="flex flex-col gap-1" aria-label="Removed stations">
-                  @for (s of removed(); track s.id) {
-                    <li class="flex items-center justify-between gap-3 py-1">
-                      <span class="truncate text-sm text-muted">{{ s.name }}</span>
-                      <button
-                        mat-stroked-button
-                        type="button"
-                        class="arena-dense"
-                        [disabled]="!arena.canEdit() || restoring() !== null"
-                        (click)="restore(s)"
-                      >
-                        Restore
-                      </button>
-                    </li>
-                  }
-                </ul>
-              </section>
-            }
           }
         </div>
       </ng-container>
@@ -183,12 +151,6 @@ export class StationsPage {
   protected readonly loading = computed(() => this.floor.loading() || this.pricing.loading());
 
   protected readonly live = computed(() => liveStations(this.floor.stations(), this.floor.live()));
-  /** Removed (disabled) stations: off the floor, kept for past bills, restorable here. */
-  protected readonly removed = computed(() =>
-    this.floor.stations().filter((s) => s.status === 'disabled'),
-  );
-  /** Station id being restored. */
-  protected readonly restoring = signal<string | null>(null);
   protected readonly type = computed(() => {
     const t = this.typeParam();
     return t && this.live().some((l) => l.station.activityCodes.includes(t)) ? t : 'all';
@@ -234,20 +196,6 @@ export class StationsPage {
   protected load(force = false): void {
     void this.floor.load(this.reads, force);
     void this.pricing.load(force);
-  }
-
-  /** Puts a removed station back on the floor (resource.set_status available). */
-  protected async restore(s: Station): Promise<void> {
-    this.restoring.set(s.id);
-    try {
-      await this.floor.setStationStatus(s.id, 'available');
-      this.snack.open(`${s.name} restored · back on the floor`, undefined, { duration: 3200 });
-      void this.router.navigate([], { queryParams: { id: s.id }, queryParamsHandling: 'merge' });
-    } catch (e) {
-      this.snack.open(toAppError(e).message, undefined, { duration: 3200 });
-    } finally {
-      this.restoring.set(null);
-    }
   }
 
   protected subtitle(l: LiveStation): string {
