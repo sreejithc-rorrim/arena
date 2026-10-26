@@ -23,6 +23,8 @@ class MyBill {
     required this.methods,
     required this.edits,
     this.addedLater = false,
+    this.quotedPaise,
+    this.addedLaterPaise = 0,
   });
 
   factory MyBill.fromJson(Map<String, dynamic> j) {
@@ -35,6 +37,11 @@ class MyBill {
       for (final p in (j['payments'] as List? ?? const []))
         Map<String, dynamic>.from(p as Map),
     ];
+    final added = [
+      for (final p in ledger)
+        if (p['note'] == 'Added later') (p['amount_paise'] as num).toInt(),
+    ];
+    final quoted = (j['quoted_paise'] as num?)?.toInt();
     return MyBill(
       kind: j['kind'] as String,
       id: j['id'] as String,
@@ -63,7 +70,10 @@ class MyBill {
               by: p['by'] as String?,
             ),
       ],
-      addedLater: ledger.any((p) => p['note'] == 'Added later'),
+      // A ₹0 missed bill has no payment row; its price still marks it.
+      addedLater: added.isNotEmpty || quoted != null,
+      quotedPaise: quoted,
+      addedLaterPaise: added.fold(0, (s, a) => s + a),
     );
   }
 
@@ -98,6 +108,19 @@ class MyBill {
 
   /// Added afterwards as a missed bill (session.record).
   final bool addedLater;
+
+  /// A missed bill's price on today's list when it was added (`quoted_paise`);
+  /// null for every other bill and for missed bills added before it was kept.
+  final int? quotedPaise;
+
+  /// What the customer paid when it was added as a missed bill (its 'Added
+  /// later' payment; 0 when nothing was paid).
+  final int addedLaterPaise;
+
+  /// The amount paid minus today's price for a missed bill (what the web's
+  /// bill detail shows as "Adjusted to amount paid"); 0 otherwise.
+  int get paidDifferencePaise =>
+      quotedPaise == null ? 0 : addedLaterPaise - quotedPaise!;
 
   bool get isVoided => status == 'voided';
   bool get isWaived => paymentStatus == 'waived';
@@ -160,8 +183,9 @@ class BillAdjustCommand {
 /// Adds a single session that was played but never started in the app (sync
 /// op `session.record`): the server prices it on the current price list,
 /// refuses any difference from [billedPaise] (the price the caller was shown),
-/// and records it paid in full by [method]. [id] is the session id and the op
-/// id, [paymentId] the payment row's, so a resend replays.
+/// and records it billed and paid at [paidPaise] by [method]. [id] is the
+/// session id and the op id, [paymentId] the payment row's, so a resend
+/// replays.
 class MissedBillCommand {
   const MissedBillCommand({
     required this.id,
@@ -175,6 +199,7 @@ class MissedBillCommand {
     required this.endedAt,
     required this.method,
     required this.billedPaise,
+    required this.paidPaise,
     required this.reason,
   });
 
@@ -188,7 +213,12 @@ class MissedBillCommand {
   final DateTime startedAt;
   final DateTime endedAt;
   final PaymentMethod method;
+
+  /// The price staff were shown (session_quote); the server refuses any other.
   final int billedPaise;
+
+  /// What the customer actually paid (0 or more): the bill is recorded at it.
+  final int paidPaise;
   final String reason;
 
   Map<String, dynamic> toPayload() => {
@@ -203,6 +233,7 @@ class MissedBillCommand {
         'ended_at': endedAt.toUtc().toIso8601String(),
         'method': method.code,
         'billed_amount_paise': billedPaise,
+        'paid_amount_paise': paidPaise,
         'reason': reason.trim(),
       };
 }

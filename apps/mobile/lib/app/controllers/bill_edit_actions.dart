@@ -5,6 +5,7 @@ library;
 
 import 'package:arena_ops/app/auth/auth_controller.dart';
 import 'package:arena_ops/app/providers/my_bills_providers.dart';
+import 'package:arena_ops/core/money/rupee_input.dart';
 import 'package:arena_ops/core/monitoring/app_telemetry.dart';
 import 'package:arena_ops/core/result/result.dart';
 import 'package:arena_ops/domain/auth/permission.dart';
@@ -114,6 +115,7 @@ class BillEditActions {
     required DateTime endedAt,
     required PaymentMethod method,
     required int billedPaise,
+    required int paidPaise,
     required String reason,
   }) => MissedBillCommand(
     id: _uuid.v4(),
@@ -127,10 +129,11 @@ class BillEditActions {
     endedAt: endedAt,
     method: method,
     billedPaise: billedPaise,
+    paidPaise: paidPaise,
     reason: reason,
   );
 
-  /// Adds the missed bill; returns its total.
+  /// Adds the missed bill; returns its total (the amount paid).
   Future<Result<int>> record(MissedBillCommand cmd) async {
     final denied = guard.check(Permission.billRecord);
     if (denied != null) return Err(denied);
@@ -138,8 +141,17 @@ class BillEditActions {
       return const Err(
         Failure(
           message: 'Say why the bill is added later.',
-          fix: 'Add a short comment.',
+          fix: 'Add a short reason.',
           code: 'reason_required',
+        ),
+      );
+    }
+    if (cmd.paidPaise < 0 || cmd.paidPaise > maxRupeeInputPaise) {
+      return const Err(
+        Failure(
+          message: 'Enter what the customer paid.',
+          fix: rupeeInputError,
+          code: 'invalid_total',
         ),
       );
     }

@@ -10,6 +10,8 @@ together.
 
 ## [Unreleased]
 
+## [0.0.1-alpha.3] - 2026-10-25
+
 ### Added
 - Admin Overview: a "Day" period shows any past day (yesterday by default, picked with a date
   field; `?period=day&day=YYYY-MM-DD`) with takings by hour, compared with the day before.
@@ -57,6 +59,20 @@ together.
   never offered. An any-system booking goes to a free station, and the other free ones are chips
   staff can pick instead. A booking for a station still in use says so ("HEX is still in use.")
   instead of failing only at "Check in & start" (#20).
+- Missed bills (admin Sales › Missed bill, floor app Bills › Add missed bill) record what the
+  customer actually paid: a required "Amount paid (₹)" field, filled in with today's price and
+  showing the difference, becomes the bill and its payment. Add bill stays off until the amount
+  and the reason (required, blank refused) are valid. The bill detail shows "Adjusted to amount
+  paid" and today's price instead of a wrong "Rounding" line. Server: `session.record` takes
+  `paid_amount_paise` (older apps without it are billed the price, as before) and audits the
+  price, the amount paid and the difference (migration `20261025150336_missed_bill_amount_paid`).
+- Floor app Bills › Add missed bill now matches the web form: after saving, the list moves to
+  the day the bill closed on, so a bill added for another day no longer seems missing; when the
+  price can't be worked out, the line under Add bill says what to do instead of "Wait for the
+  price."; the field is "Reason (required)". Tapping a missed bill shows today's price, the
+  amount paid and "Adjusted to amount paid", and a ₹0 missed bill is tagged "Added later". The
+  bill lists (`my_bills`, `arena_sales`) carry `quoted_paise`, a missed bill's price, null for
+  other bills (migration `20261025154218_missed_bill_quoted_price`).
 
 ## [0.0.1-alpha.1] - 2026-10-24
 
@@ -211,6 +227,7 @@ takings yet.
 - Admin initial bundle exceeds its 500 kB budget.
 - Not built yet: push notifications, who's-in board, shared clock-in tablet.
 
-[Unreleased]: https://github.com/rorrimlabs/arc-arena/compare/v0.0.1-alpha.1...HEAD
+[Unreleased]: https://github.com/rorrimlabs/arc-arena/compare/v0.0.1-alpha.3...HEAD
+[0.0.1-alpha.3]: https://github.com/rorrimlabs/arc-arena/compare/v0.0.1-alpha.1...v0.0.1-alpha.3
 [0.0.1-alpha.1]: https://github.com/rorrimlabs/arc-arena/compare/v0.0.1-alpha.0...v0.0.1-alpha.1
 [0.0.1-alpha.0]: https://github.com/rorrimlabs/arc-arena/releases/tag/v0.0.1-alpha.0

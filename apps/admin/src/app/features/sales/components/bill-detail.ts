@@ -122,6 +122,9 @@ const LATE_END_MS = 15 * 60_000;
             <span class="font-semibold">Added later</span>
             {{ a.by ? ' by ' + a.by : '' }} · {{ stamp(a.at) }}. Played but never started on the
             floor.
+            @if (a.quoted !== null && a.paid !== null) {
+              Priced {{ rupees(a.quoted) }} on today's list; {{ rupees(a.paid) }} paid.
+            }
             @if (a.reason) {
               <span class="mt-1 block text-muted">“{{ a.reason }}”</span>
             }
@@ -210,6 +213,9 @@ const LATE_END_MS = 15 * 60_000;
             }
             @if (rounding(); as r) {
               <app-detail-row label="Rounding" [value]="signed(r)" />
+            }
+            @if (paidDiff(); as p) {
+              <app-detail-row label="Adjusted to amount paid" [value]="signed(p)" />
             }
             @if (edited(); as e) {
               <app-detail-row label="Edited" [value]="signed(e)" />
@@ -410,10 +416,34 @@ export class BillDetail {
   protected readonly billEditedNote = BILL_EDITED_NOTE;
   /** Added later, edited, discount, refunded (the full bill's history catches edits too). */
   protected readonly flags = computed(() => billFlags(this.shown(), this.full()?.history ?? []));
-  /** The missed-bill record: who added it, when, and why (its payment carries the reason). */
+  /** The missed-bill audit entry (session.record), when the bill was added later. */
+  private readonly recorded = computed(
+    () => (this.full()?.history ?? []).find((h) => h.action === 'record') ?? null,
+  );
+  /**
+   * A missed bill is billed at what the customer actually paid: that minus today's price (its
+   * charge lines). 0 for every other bill and for missed bills added before this was recorded.
+   */
+  protected readonly paidDiff = computed(() =>
+    Number(this.recorded()?.after?.['difference_paise'] ?? 0),
+  );
+  /**
+   * The missed-bill record: who added it, when, and why (its payment carries the reason; a ₹0
+   * bill has no payment, so its audit entry does), and today's price when the amount paid differs.
+   */
   protected readonly addedLater = computed(() => {
     const p = this.shown().payments.find((x) => x.note === ADDED_LATER_NOTE);
-    return p ? { by: p.by, at: p.at, reason: p.reason } : null;
+    const r = this.recorded();
+    const source = p ?? r;
+    if (!source) return null;
+    const diff = this.paidDiff();
+    return {
+      by: source.by,
+      at: source.at,
+      reason: source.reason,
+      quoted: diff !== 0 ? Number(r?.after?.['quoted_paise'] ?? 0) : null,
+      paid: diff !== 0 ? Number(r?.after?.['paid_paise'] ?? 0) : null,
+    };
   });
   /** The fourth tile: what is still owed, or what went back, else the payment method. */
   protected readonly balance = computed(() => {
@@ -456,13 +486,17 @@ export class BillDetail {
         0,
       ),
   );
-  /** Bill-level cash rounding: the final bill minus the sum of its lines (and any edit). */
+  /**
+   * Bill-level cash rounding: the final bill minus the sum of its lines (and any edit, and a
+   * missed bill's amount paid against today's price).
+   */
   protected readonly rounding = computed(() => {
     const d = this.full();
     if (!d || d.billedPaise == null || !d.lines.length) return 0;
     return (
       d.billedPaise -
       this.edited() -
+      this.paidDiff() -
       d.lines.reduce((sum, l) => sum + l.amountPaise, 0) +
       d.discountPaise
     );
