@@ -94,6 +94,9 @@ client functions predates the current client API (it still names
 
 ## 4. Apply the migrations (your terminal, from the repo root)
 
+CI never touches a hosted database (`release.yml` only builds APKs), so push the migrations here
+**before** releasing an APK that needs them.
+
 ```bash
 supabase login
 ```

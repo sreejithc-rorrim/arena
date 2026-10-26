@@ -2,7 +2,9 @@ import { A11yModule } from '@angular/cdk/a11y';
 import { CdkMenu, CdkMenuItemRadio, CdkMenuTrigger } from '@angular/cdk/menu';
 import { NgOptimizedImage } from '@angular/common';
 import { Component, computed, effect, inject } from '@angular/core';
-import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { filter, map } from 'rxjs';
 import { ACCESS_HOME, ArenaContext } from '../arena/arena-context';
 import { Session } from '../auth/session';
 import { RealtimeSync } from '../sync/realtime-sync';
@@ -10,7 +12,10 @@ import { Layout } from './layout';
 import { VenueStore } from '../venue/venue';
 import { NAV_GROUPS } from './nav';
 
-/** App frame from the design: side nav (overlay drawer / 88px rail / 264px full) + routed page. */
+/**
+ * App frame from the design: side nav (88px rail / 264px full) + routed page; when compact, a
+ * bottom bar of quick links with the full nav in a More sheet.
+ */
 @Component({
   selector: 'app-shell',
   imports: [
@@ -24,7 +29,11 @@ import { NAV_GROUPS } from './nav';
     NgOptimizedImage,
   ],
   templateUrl: './shell.html',
-  host: { class: 'flex h-dvh overflow-hidden bg-bg text-fg' },
+  host: {
+    class: 'flex h-dvh overflow-hidden bg-bg text-fg',
+    // Panes (h-app) end above the compact quick links bar.
+    '[style.--app-bottom-bar]': "layout.compact() ? 'var(--spacing-bottom-bar)' : null",
+  },
 })
 export class Shell {
   protected readonly layout = inject(Layout);
@@ -49,6 +58,26 @@ export class Shell {
         .filter((item) => !item.perm || this.arenaContext.hasPerm(item.perm))
         .map((item) => (item.venueNoun ? { ...item, label: many } : item)),
     })).filter((group) => group.items.length);
+  });
+  /** The compact bottom bar's links (this member's quick destinations). */
+  protected readonly quickLinks = computed(() =>
+    this.navGroups()
+      .flatMap((group) => group.items)
+      .filter((item) => item.quick),
+  );
+  private readonly url = toSignal(
+    this.router.events.pipe(
+      filter((e) => e instanceof NavigationEnd),
+      map(() => this.router.url),
+    ),
+    { initialValue: this.router.url },
+  );
+  /** More is highlighted while the page open is not one of the quick links. */
+  protected readonly moreActive = computed(() => {
+    const path = this.url().split(/[?#]/)[0];
+    return !this.quickLinks().some(
+      (item) => path === '/' + item.path || path.startsWith('/' + item.path + '/'),
+    );
   });
   protected readonly rail = computed(() => !this.layout.compact() && this.layout.rail());
   protected readonly navShown = computed(() => !this.layout.compact() || this.layout.navOpen());

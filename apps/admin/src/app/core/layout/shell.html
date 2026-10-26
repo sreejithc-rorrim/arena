@@ -9,19 +9,26 @@
 @if (navShown()) {
   <!-- Escape bubbles up from the focused links inside the trap; the aside itself never takes focus. -->
   <!-- eslint-disable-next-line @angular-eslint/template/interactive-supports-focus -->
+  <!-- Compact: the More sheet over the quick links bar; wider: the side nav. -->
   <aside
     id="app-nav"
-    class="z-50 flex h-dvh flex-none flex-col border-r border-border bg-surface-sunken px-3"
+    class="z-50 flex flex-none flex-col bg-surface-sunken px-3"
     [class.w-rail]="rail()"
-    [class.w-nav]="!rail()"
-    [class.fixed]="layout.compact()"
-    [class.inset-y-0]="layout.compact()"
-    [class.left-0]="layout.compact()"
-    [class.shadow-raised]="layout.compact()"
+    [class.w-nav]="!rail() && !layout.compact()"
     [class.relative]="!layout.compact()"
+    [class.h-dvh]="!layout.compact()"
+    [class.border-r]="!layout.compact()"
+    [class.border-border]="!layout.compact()"
+    [class.fixed]="layout.compact()"
+    [class.inset-x-0]="layout.compact()"
+    [class.bottom-0]="layout.compact()"
+    [class.max-h-[85dvh]]="layout.compact()"
+    [class.rounded-t-dialog]="layout.compact()"
+    [class.shadow-raised]="layout.compact()"
+    [class.animate-sheet]="layout.compact()"
     [attr.role]="layout.compact() ? 'dialog' : null"
     [attr.aria-modal]="layout.compact() ? 'true' : null"
-    aria-label="Navigation"
+    [attr.aria-label]="layout.compact() ? 'More' : 'Navigation'"
     [cdkTrapFocus]="layout.compact()"
     [cdkTrapFocusAutoCapture]="layout.compact()"
     (keydown.escape)="layout.closeNav()"
@@ -47,6 +54,16 @@
           <span class="font-display text-[17px] leading-none font-bold">ARQ</span>
           <span class="text-xs leading-none font-medium text-muted">Owner dashboard</span>
         </div>
+      }
+      @if (layout.compact()) {
+        <button
+          type="button"
+          class="ml-auto grid size-11 flex-none place-items-center rounded-full text-muted hover:bg-info-soft"
+          aria-label="Close"
+          (click)="layout.closeNav()"
+        >
+          <span class="icon text-2xl leading-none" aria-hidden="true">close</span>
+        </button>
       }
     </div>
 
@@ -194,7 +211,7 @@
   </aside>
 }
 
-<main class="flex h-dvh min-w-0 flex-1 flex-col overflow-y-auto">
+<main class="flex h-app min-w-0 flex-1 flex-col overflow-y-auto">
   @if (arenaContext.current().id && !arenaContext.canEdit()) {
     <p
       role="note"
@@ -209,3 +226,53 @@
   }
   <router-outlet />
 </main>
+
+@if (layout.compact()) {
+  <!-- Quick links; everything else (and the arena switcher, sign-out) is under More. -->
+  <nav
+    class="fixed inset-x-0 bottom-0 z-30 flex h-bottom-bar border-t border-border bg-surface-sunken"
+    aria-label="Quick links"
+  >
+    @for (item of quickLinks(); track item.path) {
+      <a
+        [routerLink]="item.path"
+        routerLinkActive
+        #rla="routerLinkActive"
+        ariaCurrentWhenActive="page"
+        class="flex min-w-0 flex-1 flex-col items-center justify-center gap-1 no-underline"
+        [class.text-primary-text]="rla.isActive"
+        [class.font-semibold]="rla.isActive"
+        [class.text-muted]="!rla.isActive"
+        [class.font-medium]="!rla.isActive"
+      >
+        <span
+          class="icon grid h-8 w-14 place-items-center rounded-pill text-[22px] leading-none"
+          [class.bg-primary-soft]="rla.isActive"
+          [class.icon-filled]="rla.isActive"
+          aria-hidden="true"
+          >{{ item.icon }}</span
+        >
+        <span class="max-w-full truncate px-1 text-[11px] leading-none">{{ item.label }}</span>
+      </a>
+    }
+    <button
+      type="button"
+      class="flex min-w-0 flex-1 flex-col items-center justify-center gap-1"
+      [class.text-primary-text]="moreActive()"
+      [class.font-semibold]="moreActive()"
+      [class.text-muted]="!moreActive()"
+      [class.font-medium]="!moreActive()"
+      aria-controls="app-nav"
+      [attr.aria-expanded]="layout.navOpen()"
+      (click)="layout.toggleNav()"
+    >
+      <span
+        class="icon grid h-8 w-14 place-items-center rounded-pill text-[22px] leading-none"
+        [class.bg-primary-soft]="moreActive()"
+        aria-hidden="true"
+        >menu</span
+      >
+      <span class="text-[11px] leading-none">More</span>
+    </button>
+  </nav>
+}

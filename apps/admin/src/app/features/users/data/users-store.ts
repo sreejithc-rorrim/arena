@@ -126,6 +126,17 @@ export class UsersStore {
     }
   }
 
+  /** Removes a staff member for good, then reads the list again (their row is anonymised). */
+  async remove(user: ArenaUser): Promise<void> {
+    this.saving.set(user.userId);
+    try {
+      await this.api.remove(this.arena.current().id, user.userId);
+      await this.load(true);
+    } finally {
+      this.saving.set(null);
+    }
+  }
+
   private async loadInvites(arenaId: string): Promise<void> {
     this.invitesError.set('');
     try {

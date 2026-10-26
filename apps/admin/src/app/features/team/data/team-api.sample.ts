@@ -8,7 +8,7 @@ export const SAMPLE_TEAM: readonly TeamMember[] = [
   { id: 'st2', userId: 'u2', name: 'Priya Nair', role: 'staff', active: true },
   { id: 'st3', userId: 'u3', name: 'Arjun Rao', role: 'staff', active: true },
   { id: 'st4', userId: 'u4', name: 'Kavya Iyer', role: 'staff', active: false },
-].map((p) => ({ ...p, role: p.role as TeamMember['role'], createdAt: '2026-01-05T06:00:00Z' }));
+].map((p) => ({ ...p, role: p.role as TeamMember['role'], createdAt: '2026-01-05T06:00:00Z', removed: false }));
 
 /** Deterministic in-memory TeamApi for tests. */
 export class SampleTeamApi extends TeamApi {

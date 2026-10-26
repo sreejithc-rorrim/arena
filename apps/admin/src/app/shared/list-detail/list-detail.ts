@@ -15,13 +15,13 @@ import { Layout } from '../../core/layout/layout';
 @Component({
   selector: 'app-list-detail',
   imports: [A11yModule, NgTemplateOutlet],
-  host: { class: 'flex h-dvh min-w-0' },
+  host: { class: 'flex h-app min-w-0' },
   template: `
     <!-- Projected once: it is shown beside the list (wide) or over it (narrow). -->
     <ng-template #detail><ng-content select="[detail]" /></ng-template>
 
     <section
-      class="flex h-dvh min-w-0 flex-col bg-bg"
+      class="flex h-app min-w-0 flex-col bg-bg"
       [class.w-[380px]]="layout.wideDetail()"
       [class.flex-none]="layout.wideDetail()"
       [class.border-r]="layout.wideDetail()"
@@ -33,7 +33,7 @@ import { Layout } from '../../core/layout/layout';
     </section>
 
     @if (layout.wideDetail()) {
-      <section class="flex h-dvh min-w-0 flex-1 flex-col overflow-y-auto bg-bg" aria-live="polite">
+      <section class="flex h-app min-w-0 flex-1 flex-col overflow-y-auto bg-bg" aria-live="polite">
         @if (open()) {
           <ng-container [ngTemplateOutlet]="detail" />
         } @else {

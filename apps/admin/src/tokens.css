@@ -264,6 +264,7 @@
   --spacing-nav: 264px; /* full side nav */
   --spacing-rail: 88px; /* icon rail */
   --spacing-topbar: 64px; /* page header height */
+  --spacing-bottom-bar: 64px; /* quick links bar under the page when compact */
   --spacing-tap: 48px; /* minimum touch target */
 
   /* Motion */

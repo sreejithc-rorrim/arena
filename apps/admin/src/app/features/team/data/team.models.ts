@@ -6,6 +6,8 @@ export interface TeamMember {
   readonly role: 'owner' | 'staff';
   readonly active: boolean;
   readonly createdAt: string;
+  /** Removed (staff.remove): kept only so their bills keep a name ("Deleted member"). */
+  readonly removed: boolean;
 }
 
 /**

@@ -5,7 +5,7 @@ import { map } from 'rxjs';
 
 /**
  * Responsive layout state. Breakpoints:
- * - compact (< 900px): the nav is an overlay drawer opened from the page header's menu button
+ * - compact (< 900px): a bottom bar of quick links; the full nav is a sheet opened from its More
  * - rail (900–1399px): the nav collapses to an 88px icon rail
  * - full (≥ 1400px): 264px nav with labels and group headings
  * - wideDetail (≥ 1180px): list/detail screens show both panes side by side
@@ -18,7 +18,7 @@ export class Layout {
   readonly rail = this.matches('(min-width: 900px) and (max-width: 1399.98px)');
   readonly wideDetail = this.matches('(min-width: 1180px)');
 
-  /** Drawer state; only used while compact (on wider screens the nav is always shown). */
+  /** More sheet state; only used while compact (on wider screens the nav is always shown). */
   readonly navOpen = signal(false);
 
   constructor() {

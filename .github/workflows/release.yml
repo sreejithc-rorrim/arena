@@ -1,8 +1,10 @@
-# Builds the signed floor-app APKs and attaches them to a GitHub Release.
-# A `v*` tag builds staging; a manual run picks the flavor (prod only once
-# AppConfig.hostedSupabaseHosts lists the production host — until then the
-# app refuses to start). Secrets live in the GitHub Environment of the same
-# environment (`staging` / `production`), same names in each:
+# Builds the signed floor-app APKs. Every merge to main builds staging and keeps
+# the APKs as a run artifact; a `v*` tag builds staging and attaches them to a
+# GitHub Release; a manual run picks the tag and flavor (production: give the
+# `production` GitHub Environment a required reviewer). The database is never
+# touched here: migrations are pushed by hand first (docs/DEPLOY_SUPABASE.md §4).
+# Secrets live in the GitHub Environment of the same name (`staging` /
+# `production`), same names in each:
 #   DART_DEFINES               full contents of dart_define.<flavor>.json (publishable key only)
 #   ANDROID_KEYSTORE_BASE64    base64 of the release .jks (docs/RELEASE.md §4)
 #   ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
@@ -10,6 +12,7 @@ name: Release
 
 on:
   push:
+    branches: [main]
     tags: ['v*']
   workflow_dispatch:
     inputs:
@@ -25,8 +28,10 @@ on:
 permissions:
   contents: write
 
+# A newer merge replaces a running main build; tag and manual builds always finish.
 concurrency:
   group: release-${{ inputs.tag || github.ref_name }}-${{ inputs.flavor || 'staging' }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/main' }}
 
 jobs:
   android:
@@ -34,14 +39,14 @@ jobs:
     environment: ${{ (inputs.flavor || 'staging') == 'prod' && 'production' || 'staging' }}
     env:
       FLAVOR: ${{ inputs.flavor || 'staging' }}
-      TAG: ${{ inputs.tag || github.ref_name }}
+      TAG: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
     defaults:
       run:
         working-directory: apps/mobile
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ inputs.tag || github.sha }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -76,18 +81,36 @@ jobs:
 
       # Gradle refuses a flavor/AO_ENVIRONMENT mismatch, a non-cloud build or a
       # missing key; run_number keeps the version code rising across releases.
+      # A main build takes its version from pubspec.yaml and is labelled main-<sha>.
       - name: Build APKs
         run: |
+          if [ -n "$TAG" ]; then
+            name="${TAG#v}" label="$TAG"
+          else
+            name=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml) label="main-${GITHUB_SHA::7}"
+          fi
+          echo "LABEL=$label" >> "$GITHUB_ENV"
           flutter build apk --release --split-per-abi --flavor "$FLAVOR" \
             --dart-define-from-file="dart_define.$FLAVOR.json" \
-            --build-name="${TAG#v}" --build-number="${{ github.run_number }}"
+            --build-name="$name" --build-number="${{ github.run_number }}"
+          cd build/app/outputs/flutter-apk
+          for f in app-$FLAVOR-*-release.apk; do mv "$f" "arena-ops-$label-${f#app-}"; done
 
-      - name: Attach to GitHub Release
+      - name: Keep as run artifact (main)
+        if: env.TAG == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: arena-ops-${{ env.LABEL }}
+          path: apps/mobile/build/app/outputs/flutter-apk/arena-ops-*.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Attach to GitHub Release (tag)
+        if: env.TAG != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd build/app/outputs/flutter-apk
-          for f in app-$FLAVOR-*-release.apk; do mv "$f" "arena-ops-$TAG-${f#app-}"; done
           gh release view "$TAG" >/dev/null 2>&1 \
             || gh release create "$TAG" --verify-tag --generate-notes --prerelease="${{ env.FLAVOR != 'prod' }}"
           gh release upload "$TAG" arena-ops-*.apk --clobber

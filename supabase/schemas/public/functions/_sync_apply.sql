@@ -72,6 +72,7 @@ begin
       when 'discount.set_active'  then op_discount_set_active(p_arena, p)
       when 'discount.delete'      then op_discount_delete(p_arena, p)
       when 'staff.update'         then op_staff_update(p_arena, p)
+      when 'staff.remove'         then op_staff_remove(p_arena, p)
       when 'arena.update'         then op_arena_update(p_arena, p)
       when 'staff_details.save'   then op_staff_details_save(p_arena, p)
       when 'terms.publish'        then op_terms_publish(p_arena, p)
